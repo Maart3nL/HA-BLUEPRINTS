@@ -32,12 +32,12 @@ blueprint:
       default: []
       selector:
         action: {}
-     button_2_long_press:
-       name: Button Right Long Press
-       description: Action to run on long press
-       default: []
-       selector:
-         action: {}
+    # button_2_long_press:
+    #   name: Button Right Long Press
+    #   description: Action to run on long press
+    #   default: []
+    #   selector:
+    #     action: {}
     button_3_single_press:
       name: "OFF Button (Small Sun) Single Press"
       description: Action to run on single press

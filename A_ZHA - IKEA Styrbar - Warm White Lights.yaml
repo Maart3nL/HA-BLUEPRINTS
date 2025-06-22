@@ -76,14 +76,7 @@ blueprint:
           max: 5.0
           step: 0.1
           unit_of_measurement: seconds
-    button_3_long_press:
-      name: "OFF Button (Small Sun) Long Press"
-      description: Action to run on long press
-      default: []
-      selector:
-        action: {}
-
-  source_url: https://raw.githubusercontent.com/Maart3nL/HA-BLUEPRINTS/refs/heads/main/A_ZHA%20-%20IKEA%20Styrbar%20-%20Warm%20White%20Lights.yaml
+  source_url: https://community.home-assistant.io/t/zha-ikea-styrbar-warm-white-lights/341688
 mode: restart
 max_exceeded: silent
 variables:
