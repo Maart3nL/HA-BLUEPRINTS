@@ -1,0 +1,100 @@
+blueprint:
+  name: ZHA - IKEA Styrbar 4 button custom commands
+  description: |
+    Choose what all four buttons will do.
+  domain: automation
+  input:
+    remote:
+      name: Remote
+      description: Choose the remote
+      selector:
+        device:
+          integration: zha
+          manufacturer: IKEA of Sweden
+          entity:
+            domain: sensor
+            device_class: battery
+    button_1_single_press:
+      name: "ON Button (Big Sun) Single Press"
+      description: Action to run on single press
+      default: []
+      selector:
+        action: {}
+    button_1_long_press:
+      name: "ON Buttun (Big Sun) Long Press"
+      description: Action to run on long press
+      default: []
+      selector:
+        action: {}
+    button_2_single_press:
+      name: "Button Right Single Press"
+      description: Action to run on single press
+      default: []
+      selector:
+        action: {}
+    # button_2_long_press:
+    #   name: Button Right Long Press
+    #   description: Action to run on long press
+    #   default: []
+    #   selector:
+    #     action: {}
+    button_3_single_press:
+      name: "OFF Button (Small Sun) Single Press"
+      description: Action to run on single press
+      default: []
+      selector:
+        action: {}
+    button_3_long_press:
+      name: "OFF Button (Small Sun) Long Press"
+      description: Action to run on long press
+      default: []
+      selector:
+        action: {}
+    button_4_single_press:
+      name: Left Button Single Press
+      description: Action to run on single press
+      default: []
+      selector:
+        action: {}
+     button_4_long_press:
+       name: Left Button Long Press
+       description: Action to run on long press
+       default: []
+       selector:
+         action: {}
+mode: restart
+max_exceeded: silent
+trigger:
+  - platform: event
+    event_type: zha_event
+    event_data:
+      device_id: !input "remote"
+action:
+  - variables:
+      command: "{{ trigger.event.data.command }}"
+      args: "{{ trigger.event.data.args }}"
+  - choose:
+      - conditions:
+          - "{{ command == 'on' }}"
+        sequence: !input "button_1_single_press"
+      - conditions:
+          - "{{ command == 'move_with_on_off' }}"
+        sequence: !input "button_1_long_press"
+      - conditions:
+          - "{{ args[0] == 256 }}"
+        sequence: !input "button_2_single_press"
+       - conditions:
+           - "{{ command == 'up_hold' }}"
+         sequence: !input "button_2_long_press"
+      - conditions:
+          - "{{ command == 'off' }}"
+        sequence: !input "button_3_single_press"
+      - conditions:
+          - "{{ command == 'move' }}"
+        sequence: !input "button_3_long_press"
+      - conditions:
+          - "{{ args[0] == 257 }}"
+        sequence: !input "button_4_single_press"
+       - conditions:
+           - "{{ command == 'off_hold' }}"
+         sequence: !input "button_4_long_press"
