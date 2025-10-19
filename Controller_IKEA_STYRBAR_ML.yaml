@@ -646,7 +646,7 @@ actions:
               - conditions: []
                 sequence: !input action_button_right_release
       - conditions: '{{ trigger_action | string in button_up_short }}'
-      - '{{ trigger_delta | int > 1000 }}'
+        - '{{ trigger_delta | int > 1000 }}'
         sequence:
           - choose:
               # if double press event is enabled
