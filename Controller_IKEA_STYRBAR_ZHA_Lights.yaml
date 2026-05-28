@@ -202,7 +202,7 @@ blueprint:
     brightness_floor:
       name: (Optional) Brightness floor
       description: Minimum brightness for dim-down. The light will never dim below this value (and never turn off via dimming).
-      default: 1
+      default: 5
       selector:
         number:
           min: 1
@@ -223,7 +223,7 @@ blueprint:
     color_temp_step_long:
       name: (Optional) Color temp step - long press iteration
       description: Kelvin change per long-press iteration (Left long / Right long).
-      default: 300
+      default: 400
       selector:
         number:
           min: 50
@@ -386,7 +386,7 @@ blueprint:
     long_press_loop_delay:
       name: (Optional) Long press loop delay
       description: Delay between iterations during a long press loop.
-      default: 250
+      default: 150
       selector:
         number:
           min: 50
