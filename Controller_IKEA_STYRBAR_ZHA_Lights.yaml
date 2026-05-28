@@ -25,6 +25,8 @@ blueprint:
     - **Daytime** (default 06:00-19:00): **3400 K** (configurable)
     - **Outside daytime**: **2200 K** (configurable)
 
+    Brightness on turn-on is also set to a configurable level (default **100%**).
+
     The daytime window start/end are selectable in **30-minute intervals** and
     may wrap past midnight. Lights that do not support color temperature are
     still turned on (the color temp value is ignored for them).
@@ -269,6 +271,17 @@ blueprint:
           unit_of_measurement: K
           mode: box
           step: 10
+    turn_on_brightness_pct:
+      name: (Optional) Turn-on brightness
+      description: Brightness level applied when lights are turned on (Up short / Up double).
+      default: 100
+      selector:
+        number:
+          min: 1
+          max: 100
+          unit_of_measurement: "%"
+          mode: slider
+          step: 1
     day_start_time:
       name: (Optional) Daytime window - start
       description: Start of the daytime color temp window (30 min intervals). At/after this time the daytime color temp is used.
@@ -433,6 +446,7 @@ variables:
   long_press_max_repeats: !input long_press_max_repeats
   day_color_temp: !input day_color_temp
   night_color_temp: !input night_color_temp
+  turn_on_brightness_pct: !input turn_on_brightness_pct
   day_start_time: !input day_start_time
   day_end_time: !input day_end_time
   controller_id: !input controller_device
@@ -691,6 +705,7 @@ actions:
                           entity_id: "{{ lights_up_double }}"
                         data:
                           color_temp_kelvin: "{{ adaptive_on_kelvin }}"
+                          brightness_pct: "{{ turn_on_brightness_pct | int }}"
             # Single press: wait for possible 2nd press if helper is configured.
             # If no helper, fire immediately (double-press cannot trigger anyway).
             default:
@@ -709,6 +724,7 @@ actions:
                       entity_id: "{{ lights_up_short }}"
                     data:
                       color_temp_kelvin: "{{ adaptive_on_kelvin }}"
+                      brightness_pct: "{{ turn_on_brightness_pct | int }}"
 
       # ============================================================
       # UP LONG - Brightness increase per iteration (loops 15x)
