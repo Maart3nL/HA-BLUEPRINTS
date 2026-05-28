@@ -1,0 +1,82 @@
+# ============================================================================
+# Helpers for "ML Ikea Styrbar zha light control v2.0"
+# ----------------------------------------------------------------------------
+# Add this to your configuration.yaml (or split into your packages), then
+# restart Home Assistant. After that, select these helpers in the blueprint's
+# "(Synced)" settings. All STYRBAR automations pointing at the same helpers
+# will share these values — change a helper once and every automation updates.
+#
+# Note on `initial`:
+#   `initial:` sets the value on each HA restart. This gives correct defaults
+#   out of the box. If you would rather have your tuned values PERSIST across
+#   restarts, delete the `initial:` lines — the helpers will then restore their
+#   last value instead (they will start at the minimum until you set them once).
+# ============================================================================
+
+input_number:
+  styrbar_day_color_temp:
+    name: STYRBAR Daytime color temp
+    min: 1500
+    max: 6500
+    step: 10
+    unit_of_measurement: K
+    icon: mdi:white-balance-sunny
+    initial: 3400
+
+  styrbar_night_color_temp:
+    name: STYRBAR Night-time color temp
+    min: 1500
+    max: 6500
+    step: 10
+    unit_of_measurement: K
+    icon: mdi:weather-night
+    initial: 2200
+
+  styrbar_color_temp_step_short:
+    name: STYRBAR Color temp step (short press)
+    min: 50
+    max: 2000
+    step: 10
+    unit_of_measurement: K
+    icon: mdi:thermometer
+    initial: 500
+
+  styrbar_color_temp_step_long:
+    name: STYRBAR Color temp step (long press)
+    min: 50
+    max: 2000
+    step: 10
+    unit_of_measurement: K
+    icon: mdi:thermometer-lines
+    initial: 400
+
+  styrbar_brightness_step:
+    name: STYRBAR Brightness step
+    min: 1
+    max: 64
+    step: 1
+    icon: mdi:brightness-6
+    initial: 20
+
+  styrbar_brightness_floor:
+    name: STYRBAR Brightness floor
+    min: 1
+    max: 254
+    step: 1
+    icon: mdi:brightness-2
+    initial: 5
+
+input_datetime:
+  styrbar_day_start:
+    name: STYRBAR Daytime start
+    has_date: false
+    has_time: true
+    icon: mdi:weather-sunset-up
+    initial: "06:00:00"
+
+  styrbar_day_end:
+    name: STYRBAR Daytime end
+    has_date: false
+    has_time: true
+    icon: mdi:weather-sunset-down
+    initial: "19:00:00"

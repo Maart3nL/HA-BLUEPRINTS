@@ -1,0 +1,655 @@
+# Blueprint metadata
+blueprint:
+  name: ML Ikea Styrbar zha light control v2.0
+  description: |
+    # ML Ikea Styrbar zha light control v2.0
+
+    ZHA-only IKEA E2001/E2002 STYRBAR controller with hardcoded light actions.
+    **V2 changes:** per-button light selection for up/down short & double,
+    color-temp buttons act on the up-button lights automatically, and the
+    color/brightness *settings* can be driven by **shared helper entities** so
+    several STYRBAR automations stay in sync — change one helper, every
+    automation updates.
+
+    ## Actions
+    - **Left short**:  Color temp down (step from helper, default -500 K)
+    - **Left long**:   Color temp down per iteration (default -400 K; loops)
+    - **Right short**: Color temp up (default +500 K)
+    - **Right long**:  Color temp up per iteration (default +400 K; loops)
+    - **Up short**:    Turn on the *up-short* lights
+    - **Up double**:   Turn on the *up-double* lights
+    - **Up long**:     Brightness up per iteration (default +20; loops)
+    - **Down short**:  Turn off the *down-short* lights
+    - **Down double**: Turn off the *down-double* lights
+    - **Down long**:   Brightness down per iteration (default -20; loops)
+
+    ## Which lights each action uses
+    - **Up short / Up double / Down short / Down double**: their own selectors.
+    - **Color temp (Left & Right, short & long)**: the **union of the Up-short
+      and Up-double lights**, deduplicated (a light listed in both is handled
+      once). Not separately configurable — it always follows the up-button.
+    - **Up long (brighten)**: union of Up-short + Up-double lights.
+    - **Down long (dim)**: union of Down-short + Down-double lights.
+
+    ## Rules
+    - Brightness and color-temp adjustments only affect lights that are
+      **already on** (and that support the relevant feature). Off lights are skipped.
+    - Brightness floors at the configured floor (default 5) and caps at 255 —
+      dimming never turns a light off.
+    - Color temp is clamped to each light's supported min/max kelvin.
+    - On turn-on (Up short / Up double) lights are set to a configurable
+      brightness and a time-of-day color temperature.
+
+    ## Synced settings via helpers
+    The settings below can each point at a helper entity. When set, the value
+    is read **live** at run time, so editing the helper instantly changes the
+    behaviour of every automation pointing at it. Leave a setting empty to use
+    its built-in fallback default instead.
+
+    | Setting | Helper type | Fallback |
+    |---|---|---|
+    | Daytime color temp | input_number | 3400 K |
+    | Night-time color temp | input_number | 2200 K |
+    | Daytime window start | input_datetime (time) | 06:00 |
+    | Daytime window end | input_datetime (time) | 19:00 |
+    | Color temp step - short | input_number | 500 K |
+    | Color temp step - long | input_number | 400 K |
+    | Brightness step | input_number | 20 |
+    | Brightness floor | input_number | 5 |
+
+    Ready-made helper definitions (with these defaults) are provided alongside
+    this blueprint — add them to your configuration, then select them below.
+
+    ## Optional helper - double press & release events
+    Double-press (Up/Down) and `ahb_controller_event` release events need an
+    `input_text` helper for state across restarts. Leave it empty to disable
+    those features; everything else still works.
+
+  domain: automation
+  homeassistant:
+    min_version: 2024.10.0
+  input:
+    controller_device:
+      name: (Required) Controller Device
+      description: The ZHA STYRBAR device to use for this automation.
+      selector:
+        device:
+          filter:
+            - integration: zha
+              manufacturer: IKEA of Sweden
+              model: Remote Control N2
+          multiple: false
+    helper_last_controller_event:
+      name: (Optional) Helper - Last Controller Event
+      description: >-
+        An `input_text` helper used to store the last event fired by the controller.
+        **Leave empty to skip — double press and release events will be disabled.**
+        If set, the helper must already exist (max length >= 100).
+      default: ''
+      selector:
+        entity:
+          domain: input_text
+
+    # ---------- Light selectors ----------
+    lights_up_short:
+      name: Up short press - lights (Turn on)
+      description: Turned on at the configured brightness and time-of-day color temp.
+      default: []
+      selector:
+        entity:
+          multiple: true
+          filter:
+            domain: light
+    lights_up_double:
+      name: Up double press - lights (Turn on)
+      description: Turned on at the configured brightness and time-of-day color temp.
+      default: []
+      selector:
+        entity:
+          multiple: true
+          filter:
+            domain: light
+    lights_down_short:
+      name: Down short press - lights (Turn off)
+      default: []
+      selector:
+        entity:
+          multiple: true
+          filter:
+            domain: light
+    lights_down_double:
+      name: Down double press - lights (Turn off)
+      default: []
+      selector:
+        entity:
+          multiple: true
+          filter:
+            domain: light
+
+    # ---------- Synced settings (helper entities) ----------
+    day_color_temp:
+      name: (Synced) Daytime color temp (on turn-on)
+      description: input_number helper. Empty = fallback 3400 K.
+      default: ''
+      selector:
+        entity:
+          domain: input_number
+    night_color_temp:
+      name: (Synced) Night-time color temp (on turn-on)
+      description: input_number helper. Empty = fallback 2200 K.
+      default: ''
+      selector:
+        entity:
+          domain: input_number
+    day_start_time:
+      name: (Synced) Daytime window - start
+      description: input_datetime (time-only) helper. Empty = fallback 06:00.
+      default: ''
+      selector:
+        entity:
+          domain: input_datetime
+    day_end_time:
+      name: (Synced) Daytime window - end
+      description: input_datetime (time-only) helper. Empty = fallback 19:00.
+      default: ''
+      selector:
+        entity:
+          domain: input_datetime
+    color_temp_step_short:
+      name: (Synced) Color temp step - short press
+      description: input_number helper. Empty = fallback 500 K.
+      default: ''
+      selector:
+        entity:
+          domain: input_number
+    color_temp_step_long:
+      name: (Synced) Color temp step - long press iteration
+      description: input_number helper. Empty = fallback 400 K.
+      default: ''
+      selector:
+        entity:
+          domain: input_number
+    brightness_step:
+      name: (Synced) Brightness step
+      description: input_number helper (0-255 scale). Empty = fallback 20.
+      default: ''
+      selector:
+        entity:
+          domain: input_number
+    brightness_floor:
+      name: (Synced) Brightness floor
+      description: input_number helper. Empty = fallback 5. Dimming never goes below this.
+      default: ''
+      selector:
+        entity:
+          domain: input_number
+
+    # ---------- Per-automation settings ----------
+    turn_on_brightness_pct:
+      name: (Optional) Turn-on brightness
+      description: Brightness level applied when lights are turned on (Up short / Up double).
+      default: 100
+      selector:
+        number:
+          min: 1
+          max: 100
+          unit_of_measurement: "%"
+          mode: slider
+          step: 1
+    long_press_max_repeats:
+      name: (Optional) Long press - maximum iterations
+      description: How many times a long-press action repeats while held (safety cap).
+      default: 15
+      selector:
+        number:
+          min: 1
+          max: 100
+          mode: box
+          step: 1
+    long_press_loop_delay:
+      name: (Optional) Long press loop delay
+      description: Delay between iterations during a long press loop.
+      default: 150
+      selector:
+        number:
+          min: 50
+          max: 2000
+          unit_of_measurement: milliseconds
+          mode: box
+          step: 10
+    helper_double_press_delay:
+      name: (Optional) Helper - Double Press delay
+      description: Max delay between the first and second press for the double press to register.
+      default: 500
+      selector:
+        number:
+          min: 100
+          max: 5000
+          unit_of_measurement: milliseconds
+          mode: box
+          step: 10
+    helper_debounce_delay:
+      name: (Optional) Helper - Debounce delay
+      description: Delay used for debouncing raw controller events. Increase if you see duplicate events.
+      default: 0
+      selector:
+        number:
+          min: 0
+          max: 1000
+          unit_of_measurement: milliseconds
+          mode: box
+          step: 10
+
+# ===================================================================
+# Automation schema
+# ===================================================================
+variables:
+  # ---- Static inputs ----
+  helper_last_controller_event: !input helper_last_controller_event
+  helper_double_press_delay: !input helper_double_press_delay
+  helper_debounce_delay: !input helper_debounce_delay
+  long_press_loop_delay: !input long_press_loop_delay
+  long_press_max_repeats: !input long_press_max_repeats
+  turn_on_brightness_pct: !input turn_on_brightness_pct
+  controller_id: !input controller_device
+
+  # ---- Light selectors ----
+  lights_up_short: !input lights_up_short
+  lights_up_double: !input lights_up_double
+  lights_down_short: !input lights_down_short
+  lights_down_double: !input lights_down_double
+
+  # ---- Synced setting entities ----
+  e_day_color_temp: !input day_color_temp
+  e_night_color_temp: !input night_color_temp
+  e_day_start_time: !input day_start_time
+  e_day_end_time: !input day_end_time
+  e_color_temp_step_short: !input color_temp_step_short
+  e_color_temp_step_long: !input color_temp_step_long
+  e_brightness_step: !input brightness_step
+  e_brightness_floor: !input brightness_floor
+
+  # ---- Resolved setting values (live read with fallback) ----
+  day_color_temp: "{{ (states(e_day_color_temp) | float(3400)) | int if (e_day_color_temp | default('')) != '' else 3400 }}"
+  night_color_temp: "{{ (states(e_night_color_temp) | float(2200)) | int if (e_night_color_temp | default('')) != '' else 2200 }}"
+  color_temp_step_short: "{{ (states(e_color_temp_step_short) | float(500)) | int if (e_color_temp_step_short | default('')) != '' else 500 }}"
+  color_temp_step_long: "{{ (states(e_color_temp_step_long) | float(400)) | int if (e_color_temp_step_long | default('')) != '' else 400 }}"
+  brightness_step: "{{ (states(e_brightness_step) | float(20)) | int if (e_brightness_step | default('')) != '' else 20 }}"
+  brightness_floor: "{{ (states(e_brightness_floor) | float(5)) | int if (e_brightness_floor | default('')) != '' else 5 }}"
+  day_start_time: "{{ states(e_day_start_time) if ((e_day_start_time | default('')) != '' and states(e_day_start_time) not in ['unknown', 'unavailable']) else '06:00' }}"
+  day_end_time: "{{ states(e_day_end_time) if ((e_day_end_time | default('')) != '' and states(e_day_end_time) not in ['unknown', 'unavailable']) else '19:00' }}"
+
+  # ---- Derived light lists (deduplicated) ----
+  # Color temp follows the up-button lights (short + double, used once).
+  ct_lights: "{{ (lights_up_short + lights_up_double) | unique | list }}"
+  # Brightness up/down follow the up/down button lights respectively.
+  up_long_lights: "{{ (lights_up_short + lights_up_double) | unique | list }}"
+  down_long_lights: "{{ (lights_down_short + lights_down_double) | unique | list }}"
+
+  # ---- Derived constants ----
+  adjusted_double_press_delay: "{{ [helper_double_press_delay - helper_debounce_delay, 100] | max }}"
+  helper_configured: "{{ (helper_last_controller_event | default('') | string | trim) != '' }}"
+  # Time-of-day color temperature applied on turn-on. Handles midnight wrap.
+  adaptive_on_kelvin: >-
+    {%- set cur = now().hour * 60 + now().minute -%}
+    {%- set start = day_start_time.split(':')[0] | int * 60 + day_start_time.split(':')[1] | int -%}
+    {%- set end = day_end_time.split(':')[0] | int * 60 + day_end_time.split(':')[1] | int -%}
+    {%- set is_day = (start <= cur < end) if start <= end else (cur >= start or cur < end) -%}
+    {{ day_color_temp if is_day else night_color_temp }}
+
+  # ---- ZHA action code mappings ----
+  button_left_short: ['press_257_13_0']
+  button_left_long: ['hold_3329_0']
+  button_left_release: ['release']
+  button_right_short: ['press_256_13_0']
+  button_right_long: ['hold_3328_0']
+  button_right_release: ['release']
+  button_up_short: ['on']
+  button_up_long: ['move_with_on_off_0_83', 'move_with_on_off_MoveMode.Up_83']
+  button_up_release: ['stop', 'stop_with_on_off']
+  button_down_short: ['off']
+  button_down_long: ['move_1_83', 'move_MoveMode.Down_83_0_0']
+  button_down_release: ['stop', 'stop_with_on_off', 'stop_0_0']
+
+  # ---- Runtime-computed values ----
+  trigger_action: >-
+    {{ trigger.event.data.command }}{{ "_" if trigger.event.data.args|length > 0 }}{{ trigger.event.data.args|join("_") }}
+  # Short & long presses refresh the helper so the next release reads a fresh
+  # previous-event value (left/right share one 'release' code). Releases are
+  # excluded so they can read the long-press code they need.
+  needs_helper_write: >-
+    {{ trigger_action in button_left_short
+       or trigger_action in button_right_short
+       or trigger_action in button_up_short
+       or trigger_action in button_down_short
+       or trigger_action in button_left_long
+       or trigger_action in button_right_long
+       or trigger_action in button_up_long
+       or trigger_action in button_down_long }}
+
+mode: restart
+max_exceeded: silent
+
+triggers:
+  - trigger: event
+    event_type: zha_event
+    event_data:
+      device_id: !input controller_device
+
+conditions:
+  - condition: template
+    value_template: '{{ trigger_action not in ["", "None", "unknown"] }}'
+
+actions:
+  - delay:
+      milliseconds: !input helper_debounce_delay
+
+  - variables:
+      deserialized_state: '{{ states(helper_last_controller_event) | from_json(default={}) if helper_configured else {} }}'
+      trigger_delta: '{{ (as_timestamp(now()) - (deserialized_state.t | default(0))) * 1000 }}'
+      last_controller_event: '{{ deserialized_state.a | default("") }}'
+
+  - if: '{{ helper_configured and needs_helper_write }}'
+    then:
+      - action: input_text.set_value
+        data:
+          entity_id: '{{ helper_last_controller_event }}'
+          value: '{{ {"a": trigger_action, "t": as_timestamp(now())} | to_json }}'
+
+  - choose:
+      # ============================================================
+      # LEFT SHORT - Color Temp decrease (one-shot) on ct_lights
+      # ============================================================
+      - conditions: '{{ trigger_action in button_left_short }}'
+        sequence:
+          - event: ahb_controller_event
+            event_data:
+              controller: '{{ controller_id }}'
+              action: button_left_short
+          - repeat:
+              for_each: '{{ ct_lights }}'
+              sequence:
+                - if: "{{ states(repeat.item) == 'on' and state_attr(repeat.item, 'color_temp_kelvin') is not none }}"
+                  then:
+                    - variables:
+                        current_k: "{{ state_attr(repeat.item, 'color_temp_kelvin') | int }}"
+                        min_k: "{{ state_attr(repeat.item, 'min_color_temp_kelvin') | int(default=2000) }}"
+                        max_k: "{{ state_attr(repeat.item, 'max_color_temp_kelvin') | int(default=6500) }}"
+                        target_k: "{{ [[current_k - (color_temp_step_short | int), min_k] | max, max_k] | min }}"
+                    - action: light.turn_on
+                      target:
+                        entity_id: "{{ repeat.item }}"
+                      data:
+                        color_temp_kelvin: "{{ target_k }}"
+
+      # ============================================================
+      # LEFT LONG - Color Temp decrease per iteration (loops) on ct_lights
+      # ============================================================
+      - conditions: '{{ trigger_action in button_left_long }}'
+        sequence:
+          - event: ahb_controller_event
+            event_data:
+              controller: '{{ controller_id }}'
+              action: button_left_long
+          - repeat:
+              count: '{{ long_press_max_repeats }}'
+              sequence:
+                - repeat:
+                    for_each: '{{ ct_lights }}'
+                    sequence:
+                      - if: "{{ states(repeat.item) == 'on' and state_attr(repeat.item, 'color_temp_kelvin') is not none }}"
+                        then:
+                          - variables:
+                              current_k: "{{ state_attr(repeat.item, 'color_temp_kelvin') | int }}"
+                              min_k: "{{ state_attr(repeat.item, 'min_color_temp_kelvin') | int(default=2000) }}"
+                              max_k: "{{ state_attr(repeat.item, 'max_color_temp_kelvin') | int(default=6500) }}"
+                              target_k: "{{ [[current_k - (color_temp_step_long | int), min_k] | max, max_k] | min }}"
+                          - action: light.turn_on
+                            target:
+                              entity_id: "{{ repeat.item }}"
+                            data:
+                              color_temp_kelvin: "{{ target_k }}"
+                - delay:
+                    milliseconds: "{{ long_press_loop_delay }}"
+
+      # ============================================================
+      # LEFT RELEASE - Hooks event (needs helper to disambiguate from right)
+      # ============================================================
+      - conditions:
+          - '{{ helper_configured }}'
+          - '{{ trigger_action.split("_")[0] in button_left_release }}'
+          - '{{ last_controller_event in button_left_long }}'
+        sequence:
+          - event: ahb_controller_event
+            event_data:
+              controller: '{{ controller_id }}'
+              action: button_left_release
+
+      # ============================================================
+      # RIGHT SHORT - Color Temp increase (one-shot) on ct_lights
+      # ============================================================
+      - conditions: '{{ trigger_action in button_right_short }}'
+        sequence:
+          - event: ahb_controller_event
+            event_data:
+              controller: '{{ controller_id }}'
+              action: button_right_short
+          - repeat:
+              for_each: '{{ ct_lights }}'
+              sequence:
+                - if: "{{ states(repeat.item) == 'on' and state_attr(repeat.item, 'color_temp_kelvin') is not none }}"
+                  then:
+                    - variables:
+                        current_k: "{{ state_attr(repeat.item, 'color_temp_kelvin') | int }}"
+                        min_k: "{{ state_attr(repeat.item, 'min_color_temp_kelvin') | int(default=2000) }}"
+                        max_k: "{{ state_attr(repeat.item, 'max_color_temp_kelvin') | int(default=6500) }}"
+                        target_k: "{{ [[current_k + (color_temp_step_short | int), min_k] | max, max_k] | min }}"
+                    - action: light.turn_on
+                      target:
+                        entity_id: "{{ repeat.item }}"
+                      data:
+                        color_temp_kelvin: "{{ target_k }}"
+
+      # ============================================================
+      # RIGHT LONG - Color Temp increase per iteration (loops) on ct_lights
+      # ============================================================
+      - conditions: '{{ trigger_action in button_right_long }}'
+        sequence:
+          - event: ahb_controller_event
+            event_data:
+              controller: '{{ controller_id }}'
+              action: button_right_long
+          - repeat:
+              count: '{{ long_press_max_repeats }}'
+              sequence:
+                - repeat:
+                    for_each: '{{ ct_lights }}'
+                    sequence:
+                      - if: "{{ states(repeat.item) == 'on' and state_attr(repeat.item, 'color_temp_kelvin') is not none }}"
+                        then:
+                          - variables:
+                              current_k: "{{ state_attr(repeat.item, 'color_temp_kelvin') | int }}"
+                              min_k: "{{ state_attr(repeat.item, 'min_color_temp_kelvin') | int(default=2000) }}"
+                              max_k: "{{ state_attr(repeat.item, 'max_color_temp_kelvin') | int(default=6500) }}"
+                              target_k: "{{ [[current_k + (color_temp_step_long | int), min_k] | max, max_k] | min }}"
+                          - action: light.turn_on
+                            target:
+                              entity_id: "{{ repeat.item }}"
+                            data:
+                              color_temp_kelvin: "{{ target_k }}"
+                - delay:
+                    milliseconds: "{{ long_press_loop_delay }}"
+
+      # ============================================================
+      # RIGHT RELEASE - Hooks event (needs helper to disambiguate from left)
+      # ============================================================
+      - conditions:
+          - '{{ helper_configured }}'
+          - '{{ trigger_action.split("_")[0] in button_right_release }}'
+          - '{{ last_controller_event in button_right_long }}'
+        sequence:
+          - event: ahb_controller_event
+            event_data:
+              controller: '{{ controller_id }}'
+              action: button_right_release
+
+      # ============================================================
+      # UP SHORT (with double-press detection) - Turn ON up-short lights
+      # ============================================================
+      - conditions: '{{ trigger_action in button_up_short }}'
+        sequence:
+          - choose:
+              - conditions: '{{ helper_configured and trigger_action == last_controller_event and trigger_delta | int <= helper_double_press_delay | int }}'
+                sequence:
+                  - action: input_text.set_value
+                    data:
+                      entity_id: '{{ helper_last_controller_event }}'
+                      value: '{{ {"a": "double_press_up", "t": as_timestamp(now())} | to_json }}'
+                  - event: ahb_controller_event
+                    event_data:
+                      controller: '{{ controller_id }}'
+                      action: button_up_double
+                  - if: '{{ lights_up_double | count > 0 }}'
+                    then:
+                      - action: light.turn_on
+                        target:
+                          entity_id: "{{ lights_up_double }}"
+                        data:
+                          color_temp_kelvin: "{{ adaptive_on_kelvin }}"
+                          brightness_pct: "{{ turn_on_brightness_pct | int }}"
+            default:
+              - if: '{{ helper_configured }}'
+                then:
+                  - delay:
+                      milliseconds: '{{ adjusted_double_press_delay }}'
+              - event: ahb_controller_event
+                event_data:
+                  controller: '{{ controller_id }}'
+                  action: button_up_short
+              - if: '{{ lights_up_short | count > 0 }}'
+                then:
+                  - action: light.turn_on
+                    target:
+                      entity_id: "{{ lights_up_short }}"
+                    data:
+                      color_temp_kelvin: "{{ adaptive_on_kelvin }}"
+                      brightness_pct: "{{ turn_on_brightness_pct | int }}"
+
+      # ============================================================
+      # UP LONG - Brightness increase per iteration (loops) on up_long_lights
+      # ============================================================
+      - conditions: '{{ trigger_action in button_up_long }}'
+        sequence:
+          - event: ahb_controller_event
+            event_data:
+              controller: '{{ controller_id }}'
+              action: button_up_long
+          - repeat:
+              count: '{{ long_press_max_repeats }}'
+              sequence:
+                - repeat:
+                    for_each: '{{ up_long_lights }}'
+                    sequence:
+                      - if: "{{ states(repeat.item) == 'on' and state_attr(repeat.item, 'brightness') is not none }}"
+                        then:
+                          - variables:
+                              current_brightness: "{{ state_attr(repeat.item, 'brightness') | int }}"
+                              new_brightness: "{{ [current_brightness + (brightness_step | int), 255] | min }}"
+                          - action: light.turn_on
+                            target:
+                              entity_id: "{{ repeat.item }}"
+                            data:
+                              brightness: "{{ new_brightness }}"
+                - delay:
+                    milliseconds: "{{ long_press_loop_delay }}"
+
+      # ============================================================
+      # UP RELEASE - Hooks event (needs helper to disambiguate from down)
+      # ============================================================
+      - conditions:
+          - '{{ helper_configured }}'
+          - '{{ trigger_action in button_up_release }}'
+          - '{{ last_controller_event in button_up_long }}'
+        sequence:
+          - event: ahb_controller_event
+            event_data:
+              controller: '{{ controller_id }}'
+              action: button_up_release
+
+      # ============================================================
+      # DOWN SHORT (with double-press detection) - Turn OFF down-short lights
+      # ============================================================
+      - conditions: '{{ trigger_action in button_down_short }}'
+        sequence:
+          - choose:
+              - conditions: '{{ helper_configured and trigger_action == last_controller_event and trigger_delta | int <= helper_double_press_delay | int }}'
+                sequence:
+                  - action: input_text.set_value
+                    data:
+                      entity_id: '{{ helper_last_controller_event }}'
+                      value: '{{ {"a": "double_press_down", "t": as_timestamp(now())} | to_json }}'
+                  - event: ahb_controller_event
+                    event_data:
+                      controller: '{{ controller_id }}'
+                      action: button_down_double
+                  - if: '{{ lights_down_double | count > 0 }}'
+                    then:
+                      - action: light.turn_off
+                        target:
+                          entity_id: "{{ lights_down_double }}"
+            default:
+              - if: '{{ helper_configured }}'
+                then:
+                  - delay:
+                      milliseconds: '{{ adjusted_double_press_delay }}'
+              - event: ahb_controller_event
+                event_data:
+                  controller: '{{ controller_id }}'
+                  action: button_down_short
+              - if: '{{ lights_down_short | count > 0 }}'
+                then:
+                  - action: light.turn_off
+                    target:
+                      entity_id: "{{ lights_down_short }}"
+
+      # ============================================================
+      # DOWN LONG - Brightness decrease per iteration (loops) on down_long_lights
+      # Floors at configured brightness floor; never turns lights off.
+      # ============================================================
+      - conditions: '{{ trigger_action in button_down_long }}'
+        sequence:
+          - event: ahb_controller_event
+            event_data:
+              controller: '{{ controller_id }}'
+              action: button_down_long
+          - repeat:
+              count: '{{ long_press_max_repeats }}'
+              sequence:
+                - repeat:
+                    for_each: '{{ down_long_lights }}'
+                    sequence:
+                      - if: "{{ states(repeat.item) == 'on' and state_attr(repeat.item, 'brightness') is not none }}"
+                        then:
+                          - variables:
+                              current_brightness: "{{ state_attr(repeat.item, 'brightness') | int }}"
+                              new_brightness: "{{ [current_brightness - (brightness_step | int), (brightness_floor | int)] | max }}"
+                          - action: light.turn_on
+                            target:
+                              entity_id: "{{ repeat.item }}"
+                            data:
+                              brightness: "{{ new_brightness }}"
+                - delay:
+                    milliseconds: "{{ long_press_loop_delay }}"
+
+      # ============================================================
+      # DOWN RELEASE - Hooks event (needs helper to disambiguate from up)
+      # ============================================================
+      - conditions:
+          - '{{ helper_configured }}'
+          - '{{ trigger_action in button_down_release }}'
+          - '{{ last_controller_event in button_down_long }}'
+        sequence:
+          - event: ahb_controller_event
+            event_data:
+              controller: '{{ controller_id }}'
+              action: button_down_release
