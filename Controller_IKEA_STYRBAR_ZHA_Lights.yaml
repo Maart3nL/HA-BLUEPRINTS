@@ -13,10 +13,21 @@ blueprint:
     - **Left long**:   Color temperature down per iteration (default -300 K, configurable; loops, max 15)
     - **Right short**: Color temperature up (default +500 K, configurable)
     - **Right long**:  Color temperature up per iteration (default +300 K, configurable; loops, max 15)
-    - **Up short** / **Up double**:     Turn **on** selected lights
+    - **Up short** / **Up double**:     Turn **on** selected lights (sets
+      color temperature based on time of day — see *Adaptive turn-on* below)
     - **Up long**:     Brightness up per iteration (default +20, configurable; loops, max 15)
     - **Down short** / **Down double**: Turn **off** selected lights
     - **Down long**:   Brightness down per iteration (default -20, configurable; loops, max 15)
+
+    ## Adaptive turn-on color temperature
+    When lights are turned on via **Up short** or **Up double**, their color
+    temperature is set based on the time of day:
+    - **Daytime** (default 06:00-19:00): **3400 K** (configurable)
+    - **Outside daytime**: **2200 K** (configurable)
+
+    The daytime window start/end are selectable in **30-minute intervals** and
+    may wrap past midnight. Lights that do not support color temperature are
+    still turned on (the color temp value is ignored for them).
 
     ## Rules
     - Brightness changes only affect lights that are **already on** and
@@ -220,6 +231,156 @@ blueprint:
           unit_of_measurement: K
           mode: box
           step: 10
+    long_press_max_repeats:
+      name: (Optional) Long press - maximum iterations
+      description: >-
+        How many times a long-press action repeats while the button is held.
+        Acts as a safety cap in case the release event is missed. Higher values
+        let a single hold travel further (brighter/dimmer or wider color temp range).
+      default: 15
+      selector:
+        number:
+          min: 1
+          max: 100
+          mode: box
+          step: 1
+
+
+    # ---------- Adaptive color temp on turn-on (Up short / Up double) ----------
+    day_color_temp:
+      name: (Optional) Daytime color temp (on turn-on)
+      description: Color temperature applied when a light is turned on during the daytime window.
+      default: 3400
+      selector:
+        number:
+          min: 1500
+          max: 6500
+          unit_of_measurement: K
+          mode: box
+          step: 10
+    night_color_temp:
+      name: (Optional) Night-time color temp (on turn-on)
+      description: Color temperature applied when a light is turned on outside the daytime window.
+      default: 2200
+      selector:
+        number:
+          min: 1500
+          max: 6500
+          unit_of_measurement: K
+          mode: box
+          step: 10
+    day_start_time:
+      name: (Optional) Daytime window - start
+      description: Start of the daytime color temp window (30 min intervals). At/after this time the daytime color temp is used.
+      default: "06:00"
+      selector:
+        select:
+          mode: dropdown
+          options:
+            - "00:00"
+            - "00:30"
+            - "01:00"
+            - "01:30"
+            - "02:00"
+            - "02:30"
+            - "03:00"
+            - "03:30"
+            - "04:00"
+            - "04:30"
+            - "05:00"
+            - "05:30"
+            - "06:00"
+            - "06:30"
+            - "07:00"
+            - "07:30"
+            - "08:00"
+            - "08:30"
+            - "09:00"
+            - "09:30"
+            - "10:00"
+            - "10:30"
+            - "11:00"
+            - "11:30"
+            - "12:00"
+            - "12:30"
+            - "13:00"
+            - "13:30"
+            - "14:00"
+            - "14:30"
+            - "15:00"
+            - "15:30"
+            - "16:00"
+            - "16:30"
+            - "17:00"
+            - "17:30"
+            - "18:00"
+            - "18:30"
+            - "19:00"
+            - "19:30"
+            - "20:00"
+            - "20:30"
+            - "21:00"
+            - "21:30"
+            - "22:00"
+            - "22:30"
+            - "23:00"
+            - "23:30"
+    day_end_time:
+      name: (Optional) Daytime window - end
+      description: End of the daytime color temp window (30 min intervals). Before this time the daytime color temp is used; at/after it the night-time color temp is used.
+      default: "19:00"
+      selector:
+        select:
+          mode: dropdown
+          options:
+            - "00:00"
+            - "00:30"
+            - "01:00"
+            - "01:30"
+            - "02:00"
+            - "02:30"
+            - "03:00"
+            - "03:30"
+            - "04:00"
+            - "04:30"
+            - "05:00"
+            - "05:30"
+            - "06:00"
+            - "06:30"
+            - "07:00"
+            - "07:30"
+            - "08:00"
+            - "08:30"
+            - "09:00"
+            - "09:30"
+            - "10:00"
+            - "10:30"
+            - "11:00"
+            - "11:30"
+            - "12:00"
+            - "12:30"
+            - "13:00"
+            - "13:30"
+            - "14:00"
+            - "14:30"
+            - "15:00"
+            - "15:30"
+            - "16:00"
+            - "16:30"
+            - "17:00"
+            - "17:30"
+            - "18:00"
+            - "18:30"
+            - "19:00"
+            - "19:30"
+            - "20:00"
+            - "20:30"
+            - "21:00"
+            - "21:30"
+            - "22:00"
+            - "22:30"
+            - "23:00"
+            - "23:30"
 
     # ---------- Timing helpers ----------
     long_press_loop_delay:
@@ -269,6 +430,11 @@ variables:
   brightness_floor: !input brightness_floor
   color_temp_step_short: !input color_temp_step_short
   color_temp_step_long: !input color_temp_step_long
+  long_press_max_repeats: !input long_press_max_repeats
+  day_color_temp: !input day_color_temp
+  night_color_temp: !input night_color_temp
+  day_start_time: !input day_start_time
+  day_end_time: !input day_end_time
   controller_id: !input controller_device
 
   lights_left_short: !input lights_left_short
@@ -284,8 +450,16 @@ variables:
 
   # ---- Derived constants ----
   adjusted_double_press_delay: '{{ [helper_double_press_delay - helper_debounce_delay, 100] | max }}'
-  long_press_max_repeats: 15
   helper_configured: '{{ (helper_last_controller_event | default("") | string | trim) != "" }}'
+  # Time-of-day color temperature applied when lights are turned on (Up short / Up double).
+  # Daytime window uses day_color_temp; outside it uses night_color_temp.
+  # Handles windows that wrap past midnight (e.g. start 20:00, end 06:00).
+  adaptive_on_kelvin: >-
+    {%- set cur = now().hour * 60 + now().minute -%}
+    {%- set start = day_start_time.split(':')[0] | int * 60 + day_start_time.split(':')[1] | int -%}
+    {%- set end = day_end_time.split(':')[0] | int * 60 + day_end_time.split(':')[1] | int -%}
+    {%- set is_day = (start <= cur < end) if start <= end else (cur >= start or cur < end) -%}
+    {{ (day_color_temp | int) if is_day else (night_color_temp | int) }}
 
   # ---- ZHA action code mappings (preserved from original blueprint) ----
   button_left_short: ['press_257_13_0']
@@ -305,10 +479,17 @@ variables:
   # Trigger action string, derived once from the ZHA event.
   trigger_action: >-
     {{ trigger.event.data.command }}{{ "_" if trigger.event.data.args|length > 0 }}{{ trigger.event.data.args|join("_") }}
-  # Events that need the helper updated: short up/down (for double-press detection)
-  # and all long-presses (so release events can route correctly).
+  # Events that need the helper updated:
+  #  - up/down short  -> for double-press detection
+  #  - all short/long presses -> so the NEXT release event reads a fresh
+  #    previous-event value and cannot misfire on a stale long-press code
+  #    (left/right share the same 'release' code and are disambiguated this way).
+  # Release events themselves are intentionally excluded (they must not
+  # overwrite the long-press code they need to read).
   needs_helper_write: >-
-    {{ trigger_action in button_up_short
+    {{ trigger_action in button_left_short
+       or trigger_action in button_right_short
+       or trigger_action in button_up_short
        or trigger_action in button_down_short
        or trigger_action in button_left_long
        or trigger_action in button_right_long
@@ -508,6 +689,8 @@ actions:
                       - action: light.turn_on
                         target:
                           entity_id: "{{ lights_up_double }}"
+                        data:
+                          color_temp_kelvin: "{{ adaptive_on_kelvin }}"
             # Single press: wait for possible 2nd press if helper is configured.
             # If no helper, fire immediately (double-press cannot trigger anyway).
             default:
@@ -524,6 +707,8 @@ actions:
                   - action: light.turn_on
                     target:
                       entity_id: "{{ lights_up_short }}"
+                    data:
+                      color_temp_kelvin: "{{ adaptive_on_kelvin }}"
 
       # ============================================================
       # UP LONG - Brightness increase per iteration (loops 15x)
