@@ -40,25 +40,27 @@ blueprint:
     - On turn-on (Up short / Up double) lights are set to a configurable
       brightness and a time-of-day color temperature.
 
-    ## Synced settings via helpers
-    The settings below can each point at a helper entity. When set, the value
-    is read **live** at run time, so editing the helper instantly changes the
-    behaviour of every automation pointing at it. Leave a setting empty to use
-    its built-in fallback default instead.
+    ## Synced settings via fixed helpers
+    The settings below are read **live** at run time from a fixed set of helper
+    entities (defined in `styrbar_helpers.yaml`). They are **not selectable in
+    this blueprint** - every automation built from this blueprint reads the
+    same helpers, so editing a helper value (e.g. from a dashboard) instantly
+    changes the behaviour of all of them. If a helper is missing or
+    unavailable, the built-in fallback is used.
 
-    | Setting | Helper type | Fallback |
+    | Setting | Helper entity | Fallback |
     |---|---|---|
-    | Daytime color temp | input_number | 3400 K |
-    | Night-time color temp | input_number | 2200 K |
-    | Daytime window start | input_datetime (time) | 06:00 |
-    | Daytime window end | input_datetime (time) | 19:00 |
-    | Color temp step - short | input_number | 500 K |
-    | Color temp step - long | input_number | 400 K |
-    | Brightness step | input_number | 20 |
-    | Brightness floor | input_number | 5 |
+    | Daytime color temp | input_number.styrbar_day_color_temp | 3400 K |
+    | Night-time color temp | input_number.styrbar_night_color_temp | 2200 K |
+    | Daytime window start | input_datetime.styrbar_day_start | 06:00 |
+    | Daytime window end | input_datetime.styrbar_day_end | 19:00 |
+    | Color temp step - short | input_number.styrbar_color_temp_step_short | 500 K |
+    | Color temp step - long | input_number.styrbar_color_temp_step_long | 400 K |
+    | Brightness step | input_number.styrbar_brightness_step | 20 |
+    | Brightness floor | input_number.styrbar_brightness_floor | 5 |
 
-    Ready-made helper definitions (with these defaults) are provided alongside
-    this blueprint — add them to your configuration, then select them below.
+    **You must create these helpers first** (see `styrbar_helpers.yaml`),
+    otherwise the fallback values are always used.
 
     ## Optional helper - double press & release events
     Double-press (Up/Down) and `ahb_controller_event` release events need an
@@ -125,64 +127,6 @@ blueprint:
           multiple: true
           filter:
             domain: light
-
-    # ---------- Synced settings (helper entities) ----------
-    day_color_temp:
-      name: (Synced) Daytime color temp (on turn-on)
-      description: input_number helper. Empty = fallback 3400 K.
-      default: ''
-      selector:
-        entity:
-          domain: input_number
-    night_color_temp:
-      name: (Synced) Night-time color temp (on turn-on)
-      description: input_number helper. Empty = fallback 2200 K.
-      default: ''
-      selector:
-        entity:
-          domain: input_number
-    day_start_time:
-      name: (Synced) Daytime window - start
-      description: input_datetime (time-only) helper. Empty = fallback 06:00.
-      default: ''
-      selector:
-        entity:
-          domain: input_datetime
-    day_end_time:
-      name: (Synced) Daytime window - end
-      description: input_datetime (time-only) helper. Empty = fallback 19:00.
-      default: ''
-      selector:
-        entity:
-          domain: input_datetime
-    color_temp_step_short:
-      name: (Synced) Color temp step - short press
-      description: input_number helper. Empty = fallback 500 K.
-      default: ''
-      selector:
-        entity:
-          domain: input_number
-    color_temp_step_long:
-      name: (Synced) Color temp step - long press iteration
-      description: input_number helper. Empty = fallback 400 K.
-      default: ''
-      selector:
-        entity:
-          domain: input_number
-    brightness_step:
-      name: (Synced) Brightness step
-      description: input_number helper (0-255 scale). Empty = fallback 20.
-      default: ''
-      selector:
-        entity:
-          domain: input_number
-    brightness_floor:
-      name: (Synced) Brightness floor
-      description: input_number helper. Empty = fallback 5. Dimming never goes below this.
-      default: ''
-      selector:
-        entity:
-          domain: input_number
 
     # ---------- Per-automation settings ----------
     turn_on_brightness_pct:
@@ -259,25 +203,28 @@ variables:
   lights_down_short: !input lights_down_short
   lights_down_double: !input lights_down_double
 
-  # ---- Synced setting entities ----
-  e_day_color_temp: !input day_color_temp
-  e_night_color_temp: !input night_color_temp
-  e_day_start_time: !input day_start_time
-  e_day_end_time: !input day_end_time
-  e_color_temp_step_short: !input color_temp_step_short
-  e_color_temp_step_long: !input color_temp_step_long
-  e_brightness_step: !input brightness_step
-  e_brightness_floor: !input brightness_floor
+  # ---- Synced setting helper entities (hardcoded - see styrbar_helpers.yaml) ----
+  # These are fixed entity IDs, not user-selectable. Editing the helper values
+  # (e.g. from a dashboard) changes the behaviour of every automation using
+  # this blueprint. If a helper is missing/unavailable, the fallback is used.
+  e_day_color_temp: input_number.styrbar_day_color_temp
+  e_night_color_temp: input_number.styrbar_night_color_temp
+  e_day_start_time: input_datetime.styrbar_day_start
+  e_day_end_time: input_datetime.styrbar_day_end
+  e_color_temp_step_short: input_number.styrbar_color_temp_step_short
+  e_color_temp_step_long: input_number.styrbar_color_temp_step_long
+  e_brightness_step: input_number.styrbar_brightness_step
+  e_brightness_floor: input_number.styrbar_brightness_floor
 
   # ---- Resolved setting values (live read with fallback) ----
-  day_color_temp: "{{ (states(e_day_color_temp) | float(3400)) | int if (e_day_color_temp | default('')) != '' else 3400 }}"
-  night_color_temp: "{{ (states(e_night_color_temp) | float(2200)) | int if (e_night_color_temp | default('')) != '' else 2200 }}"
-  color_temp_step_short: "{{ (states(e_color_temp_step_short) | float(500)) | int if (e_color_temp_step_short | default('')) != '' else 500 }}"
-  color_temp_step_long: "{{ (states(e_color_temp_step_long) | float(400)) | int if (e_color_temp_step_long | default('')) != '' else 400 }}"
-  brightness_step: "{{ (states(e_brightness_step) | float(20)) | int if (e_brightness_step | default('')) != '' else 20 }}"
-  brightness_floor: "{{ (states(e_brightness_floor) | float(5)) | int if (e_brightness_floor | default('')) != '' else 5 }}"
-  day_start_time: "{{ states(e_day_start_time) if ((e_day_start_time | default('')) != '' and states(e_day_start_time) not in ['unknown', 'unavailable']) else '06:00' }}"
-  day_end_time: "{{ states(e_day_end_time) if ((e_day_end_time | default('')) != '' and states(e_day_end_time) not in ['unknown', 'unavailable']) else '19:00' }}"
+  day_color_temp: "{{ (states(e_day_color_temp) | float(3400)) | int }}"
+  night_color_temp: "{{ (states(e_night_color_temp) | float(2200)) | int }}"
+  color_temp_step_short: "{{ (states(e_color_temp_step_short) | float(500)) | int }}"
+  color_temp_step_long: "{{ (states(e_color_temp_step_long) | float(400)) | int }}"
+  brightness_step: "{{ (states(e_brightness_step) | float(20)) | int }}"
+  brightness_floor: "{{ (states(e_brightness_floor) | float(5)) | int }}"
+  day_start_time: "{{ states(e_day_start_time) if states(e_day_start_time) not in ['unknown', 'unavailable'] else '06:00' }}"
+  day_end_time: "{{ states(e_day_end_time) if states(e_day_end_time) not in ['unknown', 'unavailable'] else '19:00' }}"
 
   # ---- Derived light lists (deduplicated) ----
   # Color temp follows the up-button lights (short + double, used once).
