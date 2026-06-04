@@ -1,80 +1,72 @@
 # Blueprint metadata
 blueprint:
-  name: Controller - IKEA E2001/E2002 STYRBAR Remote (ZHA, Light Control)
+  name: ML Ikea Styrbar zha light control v3.0
   description: |
-    # Controller - IKEA E2001/E2002 STYRBAR Remote (ZHA, Light Control)
+    # ML Ikea Styrbar zha light control v3.0
 
-    Simplified **ZHA-only** automation for the IKEA E2001/E2002 STYRBAR remote
-    with hardcoded light control actions per button. Each button has its own
-    light selector, so you can target different lights per button.
+    ZHA-only IKEA E2001/E2002 STYRBAR controller with hardcoded light actions,
+    shared-helper settings, smooth ramping and transitions.
+
+    **V3 changes vs v2.0:**
+    - Long-press brightness & color-temp ramps are now **smooth**: the starting
+      value of each light is snapshotted once and stepped predictably, so the
+      ramp no longer stutters when Zigbee state lags.
+    - Loops **stop early** once every light has reached its target bound
+      (255 / floor / min-max kelvin) instead of running redundant iterations.
+    - A configurable **transition** smooths every light change.
+    - New synced toggle: **apply turn-on settings only when the light was off**
+      (preserve a manually-set level/temp when a light is already on).
 
     ## Actions
-    - **Left short**:  Color temperature down (default -500 K, configurable)
-    - **Left long**:   Color temperature down per iteration (default -300 K, configurable; loops, max 15)
-    - **Right short**: Color temperature up (default +500 K, configurable)
-    - **Right long**:  Color temperature up per iteration (default +300 K, configurable; loops, max 15)
-    - **Up short** / **Up double**:     Turn **on** selected lights (sets
-      color temperature based on time of day — see *Adaptive turn-on* below)
-    - **Up long**:     Brightness up per iteration (default +20, configurable; loops, max 15)
-    - **Down short** / **Down double**: Turn **off** selected lights
-    - **Down long**:   Brightness down per iteration (default -20, configurable; loops, max 15)
+    - **Left short / long**:  Color temp **down** (short step / long step)
+    - **Right short / long**: Color temp **up** (short step / long step)
+    - **Up short**:    Turn on the *up-short* lights
+    - **Up double**:   Turn on the *up-double* lights
+    - **Up long**:     Brightness up (smooth ramp; loops)
+    - **Down short**:  Turn off the *down-short* lights
+    - **Down double**: Turn off the *down-double* lights
+    - **Down long**:   Brightness down (smooth ramp; loops; floors, never off)
 
-    ## Adaptive turn-on color temperature
-    When lights are turned on via **Up short** or **Up double**, their color
-    temperature is set based on the time of day:
-    - **Daytime** (default 06:00-19:00): **3400 K** (configurable)
-    - **Outside daytime**: **2200 K** (configurable)
-
-    Brightness on turn-on is also set to a configurable level (default **100%**).
-
-    The daytime window start/end are selectable in **30-minute intervals** and
-    may wrap past midnight. Lights that do not support color temperature are
-    still turned on (the color temp value is ignored for them).
+    ## Which lights each action uses
+    - **Up short / Up double / Down short / Down double**: their own selectors.
+    - **Color temp (Left & Right)**: union of Up-short + Up-double lights,
+      deduplicated. Not separately configurable.
+    - **Up long (brighten)**: union of Up-short + Up-double lights.
+    - **Down long (dim)**: union of Down-short + Down-double lights.
 
     ## Rules
-    - Brightness changes only affect lights that are **already on** and
-      dimmable. Lights that are off, and non-dimmable lights, are skipped.
-    - **Brightness floors at the configured floor (default 1) / caps at 255.**
-      Dim-down will never turn a light off — use the Down short/double press
-      for that. Bright-up will never exceed maximum.
-    - Color temperature changes only affect lights that are **already on**
-      and support color temp. Brightness and on/off state are not modified.
-    - Kelvin values are clamped to each light's supported min/max range.
-    - **Up** and **Down** double-press events are exposed only when the
-      optional helper is configured (see below).
-    - Long-press loops are capped at **15 iterations** and stop on release.
+    - Brightness/color-temp adjustments only affect lights that are **already
+      on** (and support the feature). Off / unsupported lights are skipped.
+    - Brightness floors at the configured floor (never turns a light off) and
+      caps at 255.
+    - Color temp is clamped to each light's supported min/max kelvin.
+    - On turn-on, lights are set to a configurable brightness and a
+      time-of-day color temperature (subject to the "only when off" toggle).
 
-    ## Optional helper - enables double-press detection
-    Double-press detection (Up double / Down double) and release events
-    require an `input_text` helper for persistent state across automation
-    restarts. **Home Assistant blueprints cannot create config entities
-    themselves**, so the helper must be created once manually — but it is
-    **optional**:
+    ## Synced settings via fixed helpers
+    Read **live** at run time from fixed helper entities (see
+    `styrbar_helpers.yaml`). Not selectable here - every automation built from
+    this blueprint shares them. Missing/unavailable helper -> built-in fallback.
 
-    - **Helper provided** → full functionality, including Up / Down double
-      press and `ahb_controller_event` release events.
-    - **Helper left empty** → blueprint still works (short, long, double-
-      light selections all function), but double-press and release events
-      are disabled. Short presses also fire **immediately** (no wait), which
-      makes them feel snappier.
+    | Setting | Helper entity | Fallback |
+    |---|---|---|
+    | Daytime color temp | input_number.styrbar_day_color_temp | 3400 K |
+    | Night-time color temp | input_number.styrbar_night_color_temp | 2200 K |
+    | Daytime window start | input_datetime.styrbar_day_start | 06:00 |
+    | Daytime window end | input_datetime.styrbar_day_end | 19:00 |
+    | Color temp step - short | input_number.styrbar_color_temp_step_short | 500 K |
+    | Color temp step - long | input_number.styrbar_color_temp_step_long | 400 K |
+    | Brightness step | input_number.styrbar_brightness_step | 20 |
+    | Brightness floor | input_number.styrbar_brightness_floor | 5 |
+    | Adaptive only when off | input_boolean.styrbar_adaptive_only_when_off | off |
 
-    ### How to create the helper (choose one)
+    **Create these helpers first** (see `styrbar_helpers.yaml`), otherwise the
+    fallback values are always used.
 
-    **Option A — UI (recommended):**
-    1. Go to *Settings → Devices & services → Helpers*.
-    2. Click *Create helper → Text*.
-    3. Name it (e.g. `STYRBAR Last Event`), set **Maximum length: 100**.
-    4. Select it in the input below.
-
-    **Option B — YAML:** add to your `configuration.yaml`, then restart HA:
-    ```yaml
-    input_text:
-      styrbar_last_event:
-        name: STYRBAR Last Event
-        max: 100
-    ```
-
-    Based on the Awesome HA Blueprints project by EPMatt.
+    ## Optional helper - double press & release events
+    Double-press (Up/Down) and `ahb_controller_event` release events need an
+    `input_text` helper for state across restarts. Leave empty to disable those;
+    everything else still works.
 
   domain: automation
   homeassistant:
@@ -95,52 +87,16 @@ blueprint:
       description: >-
         An `input_text` helper used to store the last event fired by the controller.
         **Leave empty to skip — double press and release events will be disabled.**
-        If set, the helper must already exist (max length ≥ 100). See the
-        blueprint description above for instructions on how to create one.
+        If set, the helper must already exist (max length >= 100).
       default: ''
       selector:
         entity:
           domain: input_text
 
-    # ---------- Light selectors per button ----------
-    lights_left_short:
-      name: Left short press — lights (CT -500 K)
-      description: Only lights that are on and support color temp will be affected.
-      default: []
-      selector:
-        entity:
-          multiple: true
-          filter:
-            domain: light
-    lights_left_long:
-      name: Left long press — lights (CT -300 K, looping)
-      description: Only lights that are on and support color temp will be affected.
-      default: []
-      selector:
-        entity:
-          multiple: true
-          filter:
-            domain: light
-    lights_right_short:
-      name: Right short press — lights (CT +500 K)
-      description: Only lights that are on and support color temp will be affected.
-      default: []
-      selector:
-        entity:
-          multiple: true
-          filter:
-            domain: light
-    lights_right_long:
-      name: Right long press — lights (CT +300 K, looping)
-      description: Only lights that are on and support color temp will be affected.
-      default: []
-      selector:
-        entity:
-          multiple: true
-          filter:
-            domain: light
+    # ---------- Light selectors ----------
     lights_up_short:
-      name: Up short press — lights (Turn on)
+      name: Up short press - lights (Turn on)
+      description: Turned on at the configured brightness and time-of-day color temp.
       default: []
       selector:
         entity:
@@ -148,16 +104,8 @@ blueprint:
           filter:
             domain: light
     lights_up_double:
-      name: Up double press — lights (Turn on)
-      default: []
-      selector:
-        entity:
-          multiple: true
-          filter:
-            domain: light
-    lights_up_long:
-      name: Up long press — lights (Brightness +20, looping)
-      description: Only lights that are on and dimmable will be affected. Caps at 255.
+      name: Up double press - lights (Turn on)
+      description: Turned on at the configured brightness and time-of-day color temp.
       default: []
       selector:
         entity:
@@ -165,7 +113,7 @@ blueprint:
           filter:
             domain: light
     lights_down_short:
-      name: Down short press — lights (Turn off)
+      name: Down short press - lights (Turn off)
       default: []
       selector:
         entity:
@@ -173,16 +121,7 @@ blueprint:
           filter:
             domain: light
     lights_down_double:
-      name: Down double press — lights (Turn off)
-      default: []
-      selector:
-        entity:
-          multiple: true
-          filter:
-            domain: light
-    lights_down_long:
-      name: Down long press — lights (Brightness -20, looping)
-      description: Only lights that are on and dimmable will be affected. Floors at 1 (never turns off).
+      name: Down double press - lights (Turn off)
       default: []
       selector:
         entity:
@@ -190,87 +129,7 @@ blueprint:
           filter:
             domain: light
 
-    # ---------- Step sizes ----------
-    brightness_step:
-      name: (Optional) Brightness step
-      description: Amount to change brightness per long-press iteration (0-255 scale).
-      default: 20
-      selector:
-        number:
-          min: 1
-          max: 64
-          mode: box
-          step: 1
-    brightness_floor:
-      name: (Optional) Brightness floor
-      description: Minimum brightness for dim-down. The light will never dim below this value (and never turn off via dimming).
-      default: 5
-      selector:
-        number:
-          min: 1
-          max: 254
-          mode: box
-          step: 1
-    color_temp_step_short:
-      name: (Optional) Color temp step - short press
-      description: Kelvin change per short press (Left short / Right short).
-      default: 500
-      selector:
-        number:
-          min: 50
-          max: 2000
-          unit_of_measurement: K
-          mode: box
-          step: 10
-    color_temp_step_long:
-      name: (Optional) Color temp step - long press iteration
-      description: Kelvin change per long-press iteration (Left long / Right long).
-      default: 400
-      selector:
-        number:
-          min: 50
-          max: 2000
-          unit_of_measurement: K
-          mode: box
-          step: 10
-    long_press_max_repeats:
-      name: (Optional) Long press - maximum iterations
-      description: >-
-        How many times a long-press action repeats while the button is held.
-        Acts as a safety cap in case the release event is missed. Higher values
-        let a single hold travel further (brighter/dimmer or wider color temp range).
-      default: 15
-      selector:
-        number:
-          min: 1
-          max: 100
-          mode: box
-          step: 1
-
-
-    # ---------- Adaptive color temp on turn-on (Up short / Up double) ----------
-    day_color_temp:
-      name: (Optional) Daytime color temp (on turn-on)
-      description: Color temperature applied when a light is turned on during the daytime window.
-      default: 3400
-      selector:
-        number:
-          min: 1500
-          max: 6500
-          unit_of_measurement: K
-          mode: box
-          step: 10
-    night_color_temp:
-      name: (Optional) Night-time color temp (on turn-on)
-      description: Color temperature applied when a light is turned on outside the daytime window.
-      default: 2200
-      selector:
-        number:
-          min: 1500
-          max: 6500
-          unit_of_measurement: K
-          mode: box
-          step: 10
+    # ---------- Per-automation settings ----------
     turn_on_brightness_pct:
       name: (Optional) Turn-on brightness
       description: Brightness level applied when lights are turned on (Up short / Up double).
@@ -282,120 +141,46 @@ blueprint:
           unit_of_measurement: "%"
           mode: slider
           step: 1
-    day_start_time:
-      name: (Optional) Daytime window - start
-      description: Start of the daytime color temp window (30 min intervals). At/after this time the daytime color temp is used.
-      default: "06:00"
+    transition_seconds:
+      name: (Optional) Transition time
+      description: >-
+        Fade time applied to brightness ramps, color-temp changes and turn-off.
+        For long-press ramps a value at or just above the loop delay gives the
+        smoothest result. Set to 0 for instant changes. (Turn-on uses its own
+        setting below.)
+      default: 0.3
       selector:
-        select:
-          mode: dropdown
-          options:
-            - "00:00"
-            - "00:30"
-            - "01:00"
-            - "01:30"
-            - "02:00"
-            - "02:30"
-            - "03:00"
-            - "03:30"
-            - "04:00"
-            - "04:30"
-            - "05:00"
-            - "05:30"
-            - "06:00"
-            - "06:30"
-            - "07:00"
-            - "07:30"
-            - "08:00"
-            - "08:30"
-            - "09:00"
-            - "09:30"
-            - "10:00"
-            - "10:30"
-            - "11:00"
-            - "11:30"
-            - "12:00"
-            - "12:30"
-            - "13:00"
-            - "13:30"
-            - "14:00"
-            - "14:30"
-            - "15:00"
-            - "15:30"
-            - "16:00"
-            - "16:30"
-            - "17:00"
-            - "17:30"
-            - "18:00"
-            - "18:30"
-            - "19:00"
-            - "19:30"
-            - "20:00"
-            - "20:30"
-            - "21:00"
-            - "21:30"
-            - "22:00"
-            - "22:30"
-            - "23:00"
-            - "23:30"
-    day_end_time:
-      name: (Optional) Daytime window - end
-      description: End of the daytime color temp window (30 min intervals). Before this time the daytime color temp is used; at/after it the night-time color temp is used.
-      default: "19:00"
+        number:
+          min: 0
+          max: 5
+          unit_of_measurement: s
+          mode: box
+          step: 0.1
+    transition_on_turn_on:
+      name: (Optional) Turn-on transition time
+      description: >-
+        Fade time used only when turning lights ON (Up short / Up double).
+        Default 0 (instant). Some Zigbee bulbs power on at a wrong/low
+        brightness when a transition is applied from the off state — keep this
+        at 0 if you see that, even while using a transition for ramps above.
+      default: 0
       selector:
-        select:
-          mode: dropdown
-          options:
-            - "00:00"
-            - "00:30"
-            - "01:00"
-            - "01:30"
-            - "02:00"
-            - "02:30"
-            - "03:00"
-            - "03:30"
-            - "04:00"
-            - "04:30"
-            - "05:00"
-            - "05:30"
-            - "06:00"
-            - "06:30"
-            - "07:00"
-            - "07:30"
-            - "08:00"
-            - "08:30"
-            - "09:00"
-            - "09:30"
-            - "10:00"
-            - "10:30"
-            - "11:00"
-            - "11:30"
-            - "12:00"
-            - "12:30"
-            - "13:00"
-            - "13:30"
-            - "14:00"
-            - "14:30"
-            - "15:00"
-            - "15:30"
-            - "16:00"
-            - "16:30"
-            - "17:00"
-            - "17:30"
-            - "18:00"
-            - "18:30"
-            - "19:00"
-            - "19:30"
-            - "20:00"
-            - "20:30"
-            - "21:00"
-            - "21:30"
-            - "22:00"
-            - "22:30"
-            - "23:00"
-            - "23:30"
-
-    # ---------- Timing helpers ----------
+        number:
+          min: 0
+          max: 5
+          unit_of_measurement: s
+          mode: box
+          step: 0.1
+    long_press_max_repeats:
+      name: (Optional) Long press - maximum iterations
+      description: Safety cap on how many times a long-press action repeats while held.
+      default: 15
+      selector:
+        number:
+          min: 1
+          max: 100
+          mode: box
+          step: 1
     long_press_loop_delay:
       name: (Optional) Long press loop delay
       description: Delay between iterations during a long press loop.
@@ -434,48 +219,61 @@ blueprint:
 # Automation schema
 # ===================================================================
 variables:
-  # ---- Inputs -> variables (for templating) ----
+  # ---- Static inputs ----
   helper_last_controller_event: !input helper_last_controller_event
   helper_double_press_delay: !input helper_double_press_delay
   helper_debounce_delay: !input helper_debounce_delay
   long_press_loop_delay: !input long_press_loop_delay
-  brightness_step: !input brightness_step
-  brightness_floor: !input brightness_floor
-  color_temp_step_short: !input color_temp_step_short
-  color_temp_step_long: !input color_temp_step_long
   long_press_max_repeats: !input long_press_max_repeats
-  day_color_temp: !input day_color_temp
-  night_color_temp: !input night_color_temp
   turn_on_brightness_pct: !input turn_on_brightness_pct
-  day_start_time: !input day_start_time
-  day_end_time: !input day_end_time
+  transition_seconds: !input transition_seconds
+  transition_on_turn_on: !input transition_on_turn_on
   controller_id: !input controller_device
 
-  lights_left_short: !input lights_left_short
-  lights_left_long: !input lights_left_long
-  lights_right_short: !input lights_right_short
-  lights_right_long: !input lights_right_long
+  # ---- Light selectors ----
   lights_up_short: !input lights_up_short
   lights_up_double: !input lights_up_double
-  lights_up_long: !input lights_up_long
   lights_down_short: !input lights_down_short
   lights_down_double: !input lights_down_double
-  lights_down_long: !input lights_down_long
+
+  # ---- Synced setting helper entities (hardcoded - see styrbar_helpers.yaml) ----
+  e_day_color_temp: input_number.styrbar_day_color_temp
+  e_night_color_temp: input_number.styrbar_night_color_temp
+  e_day_start_time: input_datetime.styrbar_day_start
+  e_day_end_time: input_datetime.styrbar_day_end
+  e_color_temp_step_short: input_number.styrbar_color_temp_step_short
+  e_color_temp_step_long: input_number.styrbar_color_temp_step_long
+  e_brightness_step: input_number.styrbar_brightness_step
+  e_brightness_floor: input_number.styrbar_brightness_floor
+  e_adaptive_only_when_off: input_boolean.styrbar_adaptive_only_when_off
+
+  # ---- Resolved setting values (live read with fallback) ----
+  day_color_temp: "{{ (states(e_day_color_temp) | float(3400)) | int }}"
+  night_color_temp: "{{ (states(e_night_color_temp) | float(2200)) | int }}"
+  color_temp_step_short: "{{ (states(e_color_temp_step_short) | float(500)) | int }}"
+  color_temp_step_long: "{{ (states(e_color_temp_step_long) | float(400)) | int }}"
+  brightness_step: "{{ (states(e_brightness_step) | float(20)) | int }}"
+  brightness_floor: "{{ (states(e_brightness_floor) | float(5)) | int }}"
+  adaptive_only_when_off: "{{ is_state(e_adaptive_only_when_off, 'on') }}"
+  day_start_time: "{{ states(e_day_start_time) if states(e_day_start_time) not in ['unknown', 'unavailable'] else '06:00' }}"
+  day_end_time: "{{ states(e_day_end_time) if states(e_day_end_time) not in ['unknown', 'unavailable'] else '19:00' }}"
+
+  # ---- Derived light lists (deduplicated) ----
+  ct_lights: "{{ (lights_up_short + lights_up_double) | unique | list }}"
+  up_long_lights: "{{ (lights_up_short + lights_up_double) | unique | list }}"
+  down_long_lights: "{{ (lights_down_short + lights_down_double) | unique | list }}"
 
   # ---- Derived constants ----
-  adjusted_double_press_delay: '{{ [helper_double_press_delay - helper_debounce_delay, 100] | max }}'
-  helper_configured: '{{ (helper_last_controller_event | default("") | string | trim) != "" }}'
-  # Time-of-day color temperature applied when lights are turned on (Up short / Up double).
-  # Daytime window uses day_color_temp; outside it uses night_color_temp.
-  # Handles windows that wrap past midnight (e.g. start 20:00, end 06:00).
+  adjusted_double_press_delay: "{{ [helper_double_press_delay - helper_debounce_delay, 100] | max }}"
+  helper_configured: "{{ (helper_last_controller_event | default('') | string | trim) != '' }}"
   adaptive_on_kelvin: >-
     {%- set cur = now().hour * 60 + now().minute -%}
     {%- set start = day_start_time.split(':')[0] | int * 60 + day_start_time.split(':')[1] | int -%}
     {%- set end = day_end_time.split(':')[0] | int * 60 + day_end_time.split(':')[1] | int -%}
     {%- set is_day = (start <= cur < end) if start <= end else (cur >= start or cur < end) -%}
-    {{ (day_color_temp | int) if is_day else (night_color_temp | int) }}
+    {{ day_color_temp if is_day else night_color_temp }}
 
-  # ---- ZHA action code mappings (preserved from original blueprint) ----
+  # ---- ZHA action code mappings ----
   button_left_short: ['press_257_13_0']
   button_left_long: ['hold_3329_0']
   button_left_release: ['release']
@@ -489,17 +287,9 @@ variables:
   button_down_long: ['move_1_83', 'move_MoveMode.Down_83_0_0']
   button_down_release: ['stop', 'stop_with_on_off', 'stop_0_0']
 
-  # ---- Runtime-computed values (depend on trigger context) ----
-  # Trigger action string, derived once from the ZHA event.
+  # ---- Runtime-computed values ----
   trigger_action: >-
     {{ trigger.event.data.command }}{{ "_" if trigger.event.data.args|length > 0 }}{{ trigger.event.data.args|join("_") }}
-  # Events that need the helper updated:
-  #  - up/down short  -> for double-press detection
-  #  - all short/long presses -> so the NEXT release event reads a fresh
-  #    previous-event value and cannot misfire on a stale long-press code
-  #    (left/right share the same 'release' code and are disambiguated this way).
-  # Release events themselves are intentionally excluded (they must not
-  # overwrite the long-press code they need to read).
   needs_helper_write: >-
     {{ trigger_action in button_left_short
        or trigger_action in button_right_short
@@ -524,17 +314,14 @@ conditions:
     value_template: '{{ trigger_action not in ["", "None", "unknown"] }}'
 
 actions:
-  # Debounce: previous runs wait, only the last run completes (mode: restart).
   - delay:
       milliseconds: !input helper_debounce_delay
 
-  # Read previous-event state from the helper (if configured).
   - variables:
       deserialized_state: '{{ states(helper_last_controller_event) | from_json(default={}) if helper_configured else {} }}'
       trigger_delta: '{{ (as_timestamp(now()) - (deserialized_state.t | default(0))) * 1000 }}'
       last_controller_event: '{{ deserialized_state.a | default("") }}'
 
-  # Persist the latest event so the next run can use it (only when needed).
   - if: '{{ helper_configured and needs_helper_write }}'
     then:
       - action: input_text.set_value
@@ -544,7 +331,7 @@ actions:
 
   - choose:
       # ============================================================
-      # LEFT SHORT - Color Temp decrease (one-shot)
+      # LEFT SHORT - Color Temp decrease (one-shot) on ct_lights
       # ============================================================
       - conditions: '{{ trigger_action in button_left_short }}'
         sequence:
@@ -553,23 +340,24 @@ actions:
               controller: '{{ controller_id }}'
               action: button_left_short
           - repeat:
-              for_each: '{{ lights_left_short }}'
+              for_each: '{{ ct_lights }}'
               sequence:
                 - if: "{{ states(repeat.item) == 'on' and state_attr(repeat.item, 'color_temp_kelvin') is not none }}"
                   then:
                     - variables:
                         current_k: "{{ state_attr(repeat.item, 'color_temp_kelvin') | int }}"
-                        min_k: "{{ state_attr(repeat.item, 'min_color_temp_kelvin') | int(default=2000) }}"
-                        max_k: "{{ state_attr(repeat.item, 'max_color_temp_kelvin') | int(default=6500) }}"
-                        target_k: "{{ [[current_k - (color_temp_step_short | int), min_k] | max, max_k] | min }}"
+                        min_k: "{{ state_attr(repeat.item, 'min_color_temp_kelvin') | int(2000) }}"
+                        max_k: "{{ state_attr(repeat.item, 'max_color_temp_kelvin') | int(6500) }}"
+                        target_k: "{{ [ [ current_k - (color_temp_step_short | int), min_k ] | max, max_k ] | min }}"
                     - action: light.turn_on
                       target:
                         entity_id: "{{ repeat.item }}"
                       data:
                         color_temp_kelvin: "{{ target_k }}"
+                        transition: "{{ transition_seconds }}"
 
       # ============================================================
-      # LEFT LONG - Color Temp decrease per iteration (loops 15x)
+      # LEFT LONG - Color Temp decrease, smooth ramp w/ early-exit
       # ============================================================
       - conditions: '{{ trigger_action in button_left_long }}'
         sequence:
@@ -577,30 +365,40 @@ actions:
             event_data:
               controller: '{{ controller_id }}'
               action: button_left_long
+          - variables:
+              ct_snap: >-
+                {%- set ns = namespace(l=[]) -%}
+                {%- for e in ct_lights -%}
+                {%- if states(e) == 'on' and state_attr(e, 'color_temp_kelvin') is not none -%}
+                {%- set ns.l = ns.l + [{'e': e, 'start': state_attr(e, 'color_temp_kelvin') | int, 'min': state_attr(e, 'min_color_temp_kelvin') | int(2000), 'max': state_attr(e, 'max_color_temp_kelvin') | int(6500)}] -%}
+                {%- endif -%}
+                {%- endfor -%}
+                {{ ns.l }}
+              ct_iters: >-
+                {%- set ns = namespace(m=0) -%}
+                {%- for x in ct_snap -%}{%- set ns.m = [ns.m, x.start - x.min] | max -%}{%- endfor -%}
+                {{ [long_press_max_repeats, (ns.m / (color_temp_step_long | int)) | round(0, 'ceil') | int] | min if ct_snap | length > 0 else 0 }}
           - repeat:
-              count: '{{ long_press_max_repeats }}'
+              count: "{{ ct_iters }}"
               sequence:
+                - variables:
+                    iter_n: "{{ repeat.index }}"
                 - repeat:
-                    for_each: '{{ lights_left_long }}'
+                    for_each: "{{ ct_snap }}"
                     sequence:
-                      - if: "{{ states(repeat.item) == 'on' and state_attr(repeat.item, 'color_temp_kelvin') is not none }}"
+                      - if: "{{ states(repeat.item.e) == 'on' }}"
                         then:
-                          - variables:
-                              current_k: "{{ state_attr(repeat.item, 'color_temp_kelvin') | int }}"
-                              min_k: "{{ state_attr(repeat.item, 'min_color_temp_kelvin') | int(default=2000) }}"
-                              max_k: "{{ state_attr(repeat.item, 'max_color_temp_kelvin') | int(default=6500) }}"
-                              target_k: "{{ [[current_k - (color_temp_step_long | int), min_k] | max, max_k] | min }}"
                           - action: light.turn_on
                             target:
-                              entity_id: "{{ repeat.item }}"
+                              entity_id: "{{ repeat.item.e }}"
                             data:
-                              color_temp_kelvin: "{{ target_k }}"
+                              color_temp_kelvin: "{{ [ [ repeat.item.start - (color_temp_step_long | int) * (iter_n | int), repeat.item.min ] | max, repeat.item.max ] | min }}"
+                              transition: "{{ transition_seconds }}"
                 - delay:
                     milliseconds: "{{ long_press_loop_delay }}"
 
       # ============================================================
-      # LEFT RELEASE - fire event for Hooks compatibility
-      # Requires helper to disambiguate from right release (same ZHA code).
+      # LEFT RELEASE - Hooks event (needs helper to disambiguate from right)
       # ============================================================
       - conditions:
           - '{{ helper_configured }}'
@@ -613,7 +411,7 @@ actions:
               action: button_left_release
 
       # ============================================================
-      # RIGHT SHORT - Color Temp increase (one-shot)
+      # RIGHT SHORT - Color Temp increase (one-shot) on ct_lights
       # ============================================================
       - conditions: '{{ trigger_action in button_right_short }}'
         sequence:
@@ -622,23 +420,24 @@ actions:
               controller: '{{ controller_id }}'
               action: button_right_short
           - repeat:
-              for_each: '{{ lights_right_short }}'
+              for_each: '{{ ct_lights }}'
               sequence:
                 - if: "{{ states(repeat.item) == 'on' and state_attr(repeat.item, 'color_temp_kelvin') is not none }}"
                   then:
                     - variables:
                         current_k: "{{ state_attr(repeat.item, 'color_temp_kelvin') | int }}"
-                        min_k: "{{ state_attr(repeat.item, 'min_color_temp_kelvin') | int(default=2000) }}"
-                        max_k: "{{ state_attr(repeat.item, 'max_color_temp_kelvin') | int(default=6500) }}"
-                        target_k: "{{ [[current_k + (color_temp_step_short | int), min_k] | max, max_k] | min }}"
+                        min_k: "{{ state_attr(repeat.item, 'min_color_temp_kelvin') | int(2000) }}"
+                        max_k: "{{ state_attr(repeat.item, 'max_color_temp_kelvin') | int(6500) }}"
+                        target_k: "{{ [ [ current_k + (color_temp_step_short | int), min_k ] | max, max_k ] | min }}"
                     - action: light.turn_on
                       target:
                         entity_id: "{{ repeat.item }}"
                       data:
                         color_temp_kelvin: "{{ target_k }}"
+                        transition: "{{ transition_seconds }}"
 
       # ============================================================
-      # RIGHT LONG - Color Temp increase per iteration (loops 15x)
+      # RIGHT LONG - Color Temp increase, smooth ramp w/ early-exit
       # ============================================================
       - conditions: '{{ trigger_action in button_right_long }}'
         sequence:
@@ -646,30 +445,40 @@ actions:
             event_data:
               controller: '{{ controller_id }}'
               action: button_right_long
+          - variables:
+              ct_snap: >-
+                {%- set ns = namespace(l=[]) -%}
+                {%- for e in ct_lights -%}
+                {%- if states(e) == 'on' and state_attr(e, 'color_temp_kelvin') is not none -%}
+                {%- set ns.l = ns.l + [{'e': e, 'start': state_attr(e, 'color_temp_kelvin') | int, 'min': state_attr(e, 'min_color_temp_kelvin') | int(2000), 'max': state_attr(e, 'max_color_temp_kelvin') | int(6500)}] -%}
+                {%- endif -%}
+                {%- endfor -%}
+                {{ ns.l }}
+              ct_iters: >-
+                {%- set ns = namespace(m=0) -%}
+                {%- for x in ct_snap -%}{%- set ns.m = [ns.m, x.max - x.start] | max -%}{%- endfor -%}
+                {{ [long_press_max_repeats, (ns.m / (color_temp_step_long | int)) | round(0, 'ceil') | int] | min if ct_snap | length > 0 else 0 }}
           - repeat:
-              count: '{{ long_press_max_repeats }}'
+              count: "{{ ct_iters }}"
               sequence:
+                - variables:
+                    iter_n: "{{ repeat.index }}"
                 - repeat:
-                    for_each: '{{ lights_right_long }}'
+                    for_each: "{{ ct_snap }}"
                     sequence:
-                      - if: "{{ states(repeat.item) == 'on' and state_attr(repeat.item, 'color_temp_kelvin') is not none }}"
+                      - if: "{{ states(repeat.item.e) == 'on' }}"
                         then:
-                          - variables:
-                              current_k: "{{ state_attr(repeat.item, 'color_temp_kelvin') | int }}"
-                              min_k: "{{ state_attr(repeat.item, 'min_color_temp_kelvin') | int(default=2000) }}"
-                              max_k: "{{ state_attr(repeat.item, 'max_color_temp_kelvin') | int(default=6500) }}"
-                              target_k: "{{ [[current_k + (color_temp_step_long | int), min_k] | max, max_k] | min }}"
                           - action: light.turn_on
                             target:
-                              entity_id: "{{ repeat.item }}"
+                              entity_id: "{{ repeat.item.e }}"
                             data:
-                              color_temp_kelvin: "{{ target_k }}"
+                              color_temp_kelvin: "{{ [ [ repeat.item.start + (color_temp_step_long | int) * (iter_n | int), repeat.item.min ] | max, repeat.item.max ] | min }}"
+                              transition: "{{ transition_seconds }}"
                 - delay:
                     milliseconds: "{{ long_press_loop_delay }}"
 
       # ============================================================
-      # RIGHT RELEASE - fire event for Hooks compatibility
-      # Requires helper to disambiguate from left release (same ZHA code).
+      # RIGHT RELEASE - Hooks event (needs helper to disambiguate from left)
       # ============================================================
       - conditions:
           - '{{ helper_configured }}'
@@ -682,12 +491,11 @@ actions:
               action: button_right_release
 
       # ============================================================
-      # UP SHORT (with double-press detection) - Turn ON
+      # UP SHORT (with double-press detection) - Turn ON up-short lights
       # ============================================================
       - conditions: '{{ trigger_action in button_up_short }}'
         sequence:
           - choose:
-              # Previous event was an up-short within the double-press window -> double press
               - conditions: '{{ helper_configured and trigger_action == last_controller_event and trigger_delta | int <= helper_double_press_delay | int }}'
                 sequence:
                   - action: input_text.set_value
@@ -698,16 +506,18 @@ actions:
                     event_data:
                       controller: '{{ controller_id }}'
                       action: button_up_double
-                  - if: '{{ lights_up_double | count > 0 }}'
-                    then:
-                      - action: light.turn_on
-                        target:
-                          entity_id: "{{ lights_up_double }}"
-                        data:
-                          color_temp_kelvin: "{{ adaptive_on_kelvin }}"
-                          brightness_pct: "{{ turn_on_brightness_pct | int }}"
-            # Single press: wait for possible 2nd press if helper is configured.
-            # If no helper, fire immediately (double-press cannot trigger anyway).
+                  - repeat:
+                      for_each: "{{ lights_up_double }}"
+                      sequence:
+                        - if: "{{ not adaptive_only_when_off or states(repeat.item) != 'on' }}"
+                          then:
+                            - action: light.turn_on
+                              target:
+                                entity_id: "{{ repeat.item }}"
+                              data:
+                                color_temp_kelvin: "{{ adaptive_on_kelvin }}"
+                                brightness_pct: "{{ turn_on_brightness_pct | int }}"
+                                transition: "{{ transition_on_turn_on }}"
             default:
               - if: '{{ helper_configured }}'
                 then:
@@ -717,18 +527,21 @@ actions:
                 event_data:
                   controller: '{{ controller_id }}'
                   action: button_up_short
-              - if: '{{ lights_up_short | count > 0 }}'
-                then:
-                  - action: light.turn_on
-                    target:
-                      entity_id: "{{ lights_up_short }}"
-                    data:
-                      color_temp_kelvin: "{{ adaptive_on_kelvin }}"
-                      brightness_pct: "{{ turn_on_brightness_pct | int }}"
+              - repeat:
+                  for_each: "{{ lights_up_short }}"
+                  sequence:
+                    - if: "{{ not adaptive_only_when_off or states(repeat.item) != 'on' }}"
+                      then:
+                        - action: light.turn_on
+                          target:
+                            entity_id: "{{ repeat.item }}"
+                          data:
+                            color_temp_kelvin: "{{ adaptive_on_kelvin }}"
+                            brightness_pct: "{{ turn_on_brightness_pct | int }}"
+                            transition: "{{ transition_on_turn_on }}"
 
       # ============================================================
-      # UP LONG - Brightness increase per iteration (loops 15x)
-      # Only acts on dimmable lights that are currently on; caps at 255.
+      # UP LONG - Brightness increase, smooth ramp w/ early-exit
       # ============================================================
       - conditions: '{{ trigger_action in button_up_long }}'
         sequence:
@@ -736,28 +549,40 @@ actions:
             event_data:
               controller: '{{ controller_id }}'
               action: button_up_long
+          - variables:
+              b_snap: >-
+                {%- set ns = namespace(l=[]) -%}
+                {%- for e in up_long_lights -%}
+                {%- if states(e) == 'on' and state_attr(e, 'brightness') is not none -%}
+                {%- set ns.l = ns.l + [{'e': e, 'start': state_attr(e, 'brightness') | int}] -%}
+                {%- endif -%}
+                {%- endfor -%}
+                {{ ns.l }}
+              b_iters: >-
+                {%- set ns = namespace(m=0) -%}
+                {%- for x in b_snap -%}{%- set ns.m = [ns.m, 255 - x.start] | max -%}{%- endfor -%}
+                {{ [long_press_max_repeats, (ns.m / (brightness_step | int)) | round(0, 'ceil') | int] | min if b_snap | length > 0 else 0 }}
           - repeat:
-              count: '{{ long_press_max_repeats }}'
+              count: "{{ b_iters }}"
               sequence:
+                - variables:
+                    iter_n: "{{ repeat.index }}"
                 - repeat:
-                    for_each: '{{ lights_up_long }}'
+                    for_each: "{{ b_snap }}"
                     sequence:
-                      - if: "{{ states(repeat.item) == 'on' and state_attr(repeat.item, 'brightness') is not none }}"
+                      - if: "{{ states(repeat.item.e) == 'on' }}"
                         then:
-                          - variables:
-                              current_brightness: "{{ state_attr(repeat.item, 'brightness') | int }}"
-                              new_brightness: "{{ [current_brightness + (brightness_step | int), 255] | min }}"
                           - action: light.turn_on
                             target:
-                              entity_id: "{{ repeat.item }}"
+                              entity_id: "{{ repeat.item.e }}"
                             data:
-                              brightness: "{{ new_brightness }}"
+                              brightness: "{{ [ repeat.item.start + (brightness_step | int) * (iter_n | int), 255 ] | min }}"
+                              transition: "{{ transition_seconds }}"
                 - delay:
                     milliseconds: "{{ long_press_loop_delay }}"
 
       # ============================================================
-      # UP RELEASE - fire event for Hooks compatibility
-      # Requires helper to disambiguate from down release (overlapping ZHA codes).
+      # UP RELEASE - Hooks event (needs helper to disambiguate from down)
       # ============================================================
       - conditions:
           - '{{ helper_configured }}'
@@ -770,7 +595,7 @@ actions:
               action: button_up_release
 
       # ============================================================
-      # DOWN SHORT (with double-press detection) - Turn OFF
+      # DOWN SHORT (with double-press detection) - Turn OFF down-short lights
       # ============================================================
       - conditions: '{{ trigger_action in button_down_short }}'
         sequence:
@@ -790,6 +615,8 @@ actions:
                       - action: light.turn_off
                         target:
                           entity_id: "{{ lights_down_double }}"
+                        data:
+                          transition: "{{ transition_seconds }}"
             default:
               - if: '{{ helper_configured }}'
                 then:
@@ -804,11 +631,12 @@ actions:
                   - action: light.turn_off
                     target:
                       entity_id: "{{ lights_down_short }}"
+                    data:
+                      transition: "{{ transition_seconds }}"
 
       # ============================================================
-      # DOWN LONG - Brightness decrease per iteration (loops 15x)
-      # Only acts on dimmable lights that are currently on; floors at the
-      # configured brightness floor (never turns the light off).
+      # DOWN LONG - Brightness decrease, smooth ramp w/ early-exit
+      # Floors at configured brightness floor; never turns lights off.
       # ============================================================
       - conditions: '{{ trigger_action in button_down_long }}'
         sequence:
@@ -816,28 +644,40 @@ actions:
             event_data:
               controller: '{{ controller_id }}'
               action: button_down_long
+          - variables:
+              b_snap: >-
+                {%- set ns = namespace(l=[]) -%}
+                {%- for e in down_long_lights -%}
+                {%- if states(e) == 'on' and state_attr(e, 'brightness') is not none -%}
+                {%- set ns.l = ns.l + [{'e': e, 'start': state_attr(e, 'brightness') | int}] -%}
+                {%- endif -%}
+                {%- endfor -%}
+                {{ ns.l }}
+              b_iters: >-
+                {%- set ns = namespace(m=0) -%}
+                {%- for x in b_snap -%}{%- set ns.m = [ns.m, x.start - (brightness_floor | int)] | max -%}{%- endfor -%}
+                {{ [long_press_max_repeats, (ns.m / (brightness_step | int)) | round(0, 'ceil') | int] | min if b_snap | length > 0 else 0 }}
           - repeat:
-              count: '{{ long_press_max_repeats }}'
+              count: "{{ b_iters }}"
               sequence:
+                - variables:
+                    iter_n: "{{ repeat.index }}"
                 - repeat:
-                    for_each: '{{ lights_down_long }}'
+                    for_each: "{{ b_snap }}"
                     sequence:
-                      - if: "{{ states(repeat.item) == 'on' and state_attr(repeat.item, 'brightness') is not none }}"
+                      - if: "{{ states(repeat.item.e) == 'on' }}"
                         then:
-                          - variables:
-                              current_brightness: "{{ state_attr(repeat.item, 'brightness') | int }}"
-                              new_brightness: "{{ [current_brightness - (brightness_step | int), (brightness_floor | int)] | max }}"
                           - action: light.turn_on
                             target:
-                              entity_id: "{{ repeat.item }}"
+                              entity_id: "{{ repeat.item.e }}"
                             data:
-                              brightness: "{{ new_brightness }}"
+                              brightness: "{{ [ repeat.item.start - (brightness_step | int) * (iter_n | int), brightness_floor | int ] | max }}"
+                              transition: "{{ transition_seconds }}"
                 - delay:
                     milliseconds: "{{ long_press_loop_delay }}"
 
       # ============================================================
-      # DOWN RELEASE - fire event for Hooks compatibility
-      # Requires helper to disambiguate from up release (overlapping ZHA codes).
+      # DOWN RELEASE - Hooks event (needs helper to disambiguate from up)
       # ============================================================
       - conditions:
           - '{{ helper_configured }}'
