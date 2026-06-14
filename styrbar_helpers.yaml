@@ -1,5 +1,5 @@
 # ============================================================================
-# Helpers for "ML Ikea Styrbar zha light control v3.1"
+# Helpers for "ML Ikea Styrbar zha light control v3.2"
 # ----------------------------------------------------------------------------
 # Add this to your configuration.yaml (or split into your packages), then
 # restart Home Assistant.
@@ -73,6 +73,17 @@ input_number:
     icon: mdi:brightness-2
     initial: 2
 
+  # Minutes over which the colour temp ramps between night and day at each
+  # day-window edge (sunrise/sunset blend). 0 = hard switch (old v3.1).
+  styrbar_adaptive_transition_min:
+    name: STYRBAR Adaptive transition window
+    min: 0
+    max: 240
+    step: 5
+    unit_of_measurement: min
+    icon: mdi:transition
+    initial: 90
+
 input_datetime:
   styrbar_day_start:
     name: STYRBAR Daytime start
@@ -95,6 +106,16 @@ input_boolean:
     # off (default) = always apply brightness + color temp on turn-on.
     # on            = only apply them when the light was actually off,
     #                 preserving a manually-set level when already on.
+
+  styrbar_adaptive_ct_follow:
+    name: STYRBAR Adaptive color temp follows time
+    icon: mdi:theme-light-dark
+    initial: true
+    # on  = on-lights continuously follow the day/night colour-temp curve
+    #       (re-checked every 5 minutes), not only when switched on.
+    # off = colour temp is only set at turn-on (v3.1 behaviour).
+    # Note: while on, the timed update pulls a colour temp set by hand with
+    #       Left/Right back onto the curve within a few minutes.
 
 # ----------------------------------------------------------------------------
 # Optional: per-remote "last controller event" helper.
