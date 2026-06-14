@@ -4,10 +4,23 @@ blueprint:
   description: |
     # IKEA STYRBAR (ZHA) — Smooth Dimming & Adaptive Color
 
-    Version 3.1
+    Version 3.2
 
     ZHA-only IKEA E2001/E2002 STYRBAR controller with hardcoded light actions,
     shared-helper settings, smooth ramping and transitions.
+
+    **V3.2 changes vs v3.1:**
+    - **Continuous adaptive color temp**: on-lights now follow the day/night
+      colour-temperature curve automatically over time (re-checked every
+      5 min), not only the moment they are switched on. Turn this on with the
+      new `input_boolean.styrbar_adaptive_ct_follow` helper.
+    - **Smooth sunrise/sunset blend**: instead of a hard jump between the day
+      and night temps at the window edges, the temperature now ramps across a
+      configurable window (`input_number.styrbar_adaptive_transition_min`,
+      default 90 min; set 0 for the old hard switch). Turn-on uses the same
+      curve, so a press matches what the timed update would set.
+    - Note: while "follow" is on, the timed update will pull a colour temp you
+      set by hand with Left/Right back onto the curve within a few minutes.
 
     **V3.1 changes vs v3.0:**
     - **Mixed-light safe turn-on**: each light receives only the parameters it
@@ -78,6 +91,8 @@ blueprint:
     | Brightness step (%) | input_number.styrbar_brightness_step | 8 % |
     | Brightness floor (%) | input_number.styrbar_brightness_floor | 2 % |
     | Adaptive only when off | input_boolean.styrbar_adaptive_only_when_off | off |
+    | Adaptive color temp follows time | input_boolean.styrbar_adaptive_ct_follow | off |
+    | Adaptive transition window (min) | input_number.styrbar_adaptive_transition_min | 90 |
 
     **Create these helpers first** (see `styrbar_helpers.yaml`), otherwise the
     fallback values are always used.
@@ -300,6 +315,24 @@ blueprint:
       selector:
         entity:
           domain: input_boolean
+    setting_adaptive_ct_follow:
+      name: (Synced) Adaptive color temp follows time helper
+      description: >-
+        input_boolean - when on, on-lights continuously follow the day/night
+        colour-temp curve (re-checked every 5 min), not only at turn-on.
+      default: input_boolean.styrbar_adaptive_ct_follow
+      selector:
+        entity:
+          domain: input_boolean
+    setting_adaptive_transition_min:
+      name: (Synced) Adaptive transition window helper (minutes)
+      description: >-
+        input_number - minutes over which the colour temp ramps between the
+        night and day temps around each day-window edge. 0 = hard switch.
+      default: input_number.styrbar_adaptive_transition_min
+      selector:
+        entity:
+          domain: input_number
 
 # ===================================================================
 # Automation schema
@@ -332,6 +365,8 @@ variables:
   e_brightness_step: !input setting_brightness_step
   e_brightness_floor: !input setting_brightness_floor
   e_adaptive_only_when_off: !input setting_adaptive_only_when_off
+  e_adaptive_ct_follow: !input setting_adaptive_ct_follow
+  e_adaptive_transition_min: !input setting_adaptive_transition_min
 
   # ---- Resolved setting values (live read with fallback) ----
   day_color_temp: "{{ (states(e_day_color_temp) | float(3400)) | int }}"
@@ -339,6 +374,8 @@ variables:
   color_temp_step_short: "{{ (states(e_color_temp_step_short) | float(500)) | int }}"
   color_temp_step_long: "{{ (states(e_color_temp_step_long) | float(400)) | int }}"
   adaptive_only_when_off: "{{ is_state(e_adaptive_only_when_off, 'on') }}"
+  adaptive_ct_follow: "{{ is_state(e_adaptive_ct_follow, 'on') }}"
+  adaptive_transition_min: "{{ states(e_adaptive_transition_min) | float(90) }}"
   day_start_time: "{{ states(e_day_start_time) if states(e_day_start_time) not in ['unknown', 'unavailable'] else '06:00' }}"
   day_end_time: "{{ states(e_day_end_time) if states(e_day_end_time) not in ['unknown', 'unavailable'] else '19:00' }}"
   # Brightness step/floor are configured in %; convert to the 0-255 scale once.
@@ -355,12 +392,31 @@ variables:
   # ---- Derived constants ----
   adjusted_double_press_delay: "{{ [helper_double_press_delay - helper_debounce_delay, 100] | max }}"
   helper_configured: "{{ (helper_last_controller_event | default('') | string | trim) != '' }}"
+  # Time-of-day colour temperature. Flat night/day plateaus with a smooth ramp
+  # between them across `adaptive_transition_min` minutes at each day-window
+  # edge (sunrise/sunset blend). A window of 0 reproduces the old v3.1 hard
+  # switch. Day windows that cross midnight fall back to a hard switch.
   adaptive_on_kelvin: >-
     {%- set cur = now().hour * 60 + now().minute -%}
     {%- set start = day_start_time.split(':')[0] | int * 60 + day_start_time.split(':')[1] | int -%}
     {%- set end = day_end_time.split(':')[0] | int * 60 + day_end_time.split(':')[1] | int -%}
-    {%- set is_day = (start <= cur < end) if start <= end else (cur >= start or cur < end) -%}
-    {{ day_color_temp if is_day else night_color_temp }}
+    {%- set d = day_color_temp | int -%}
+    {%- set n = night_color_temp | int -%}
+    {%- if start < end -%}
+      {%- set w = [adaptive_transition_min | float, (end - start) / 2] | min -%}
+      {%- if cur <= start or cur >= end -%}
+        {{ n }}
+      {%- elif w > 0 and cur < start + w -%}
+        {{ (n + (d - n) * (cur - start) / w) | round(0) | int }}
+      {%- elif w > 0 and cur > end - w -%}
+        {{ (d + (n - d) * (cur - (end - w)) / w) | round(0) | int }}
+      {%- else -%}
+        {{ d }}
+      {%- endif -%}
+    {%- else -%}
+      {%- set is_day = (cur >= start or cur < end) -%}
+      {{ d if is_day else n }}
+    {%- endif -%}
 
   # ---- ZHA action code mappings ----
   button_left_short: ['press_257_13_0']
@@ -380,7 +436,7 @@ variables:
 
   # ---- Runtime-computed values ----
   trigger_action: >-
-    {{ trigger.event.data.command }}{{ "_" if trigger.event.data.args|length > 0 }}{{ trigger.event.data.args|join("_") }}
+    {% if trigger.id == 'adaptive_tick' %}{% else %}{{ trigger.event.data.command }}{{ "_" if trigger.event.data.args|length > 0 }}{{ trigger.event.data.args|join("_") }}{% endif %}
   needs_helper_write: >-
     {{ trigger_action in button_left_short
        or trigger_action in button_right_short
@@ -396,13 +452,18 @@ max_exceeded: silent
 
 triggers:
   - trigger: event
+    id: remote
     event_type: zha_event
     event_data:
       device_id: !input controller_device
+  # Periodic tick so on-lights can follow the time-of-day colour-temp curve.
+  - trigger: time_pattern
+    id: adaptive_tick
+    minutes: "/5"
 
 conditions:
   - condition: template
-    value_template: '{{ trigger_action not in ["", "None", "unknown"] }}'
+    value_template: '{{ (trigger.id == "adaptive_tick" and adaptive_ct_follow) or trigger_action not in ["", "None", "unknown"] }}'
 
 actions:
   - delay:
@@ -421,6 +482,31 @@ actions:
           value: '{{ {"a": trigger_action, "t": as_timestamp(now())} | to_json }}'
 
   - choose:
+      # ============================================================
+      # ADAPTIVE TICK - keep on-lights on the time-of-day colour-temp
+      #   curve. Fires on the periodic time_pattern trigger only. Skips
+      #   off / non-color-temp lights and lights already on target.
+      # ============================================================
+      - conditions: '{{ trigger.id == "adaptive_tick" and adaptive_ct_follow }}'
+        sequence:
+          - repeat:
+              for_each: '{{ ct_lights }}'
+              sequence:
+                - if: "{{ states(repeat.item) == 'on' and state_attr(repeat.item, 'color_temp_kelvin') is not none }}"
+                  then:
+                    - variables:
+                        min_k: "{{ state_attr(repeat.item, 'min_color_temp_kelvin') | int(2000) }}"
+                        max_k: "{{ state_attr(repeat.item, 'max_color_temp_kelvin') | int(6500) }}"
+                        tgt_k: "{{ [ [ adaptive_on_kelvin | int, min_k ] | max, max_k ] | min }}"
+                    - if: "{{ (state_attr(repeat.item, 'color_temp_kelvin') | int - tgt_k) | abs > 1 }}"
+                      then:
+                        - action: light.turn_on
+                          target:
+                            entity_id: "{{ repeat.item }}"
+                          data:
+                            color_temp_kelvin: "{{ tgt_k }}"
+                            transition: "{{ transition_seconds }}"
+
       # ============================================================
       # LEFT / RIGHT SHORT - Color Temp step (one-shot) on ct_lights
       #   direction: left = down (-1), right = up (+1)
