@@ -1,10 +1,14 @@
 # ============================================================================
-# Helpers for "ML Ikea Styrbar zha light control v2.0"
+# Helpers for "ML Ikea Styrbar zha light control v3.1"
 # ----------------------------------------------------------------------------
 # Add this to your configuration.yaml (or split into your packages), then
-# restart Home Assistant. After that, select these helpers in the blueprint's
-# "(Synced)" settings. All STYRBAR automations pointing at the same helpers
-# will share these values — change a helper once and every automation updates.
+# restart Home Assistant.
+#
+# These entities hold the blueprint's "(Synced)" settings. By default every
+# STYRBAR automation reads them directly, so changing a helper once updates all
+# of them. (In v3.1 you can optionally point an individual automation at a
+# different helper via its "(Synced) ... helper" overrides — e.g. a second
+# remote with its own day/night temps.)
 #
 # Note on `initial`:
 #   `initial:` sets the value on each HA restart. This gives correct defaults
@@ -50,21 +54,24 @@ input_number:
     icon: mdi:thermometer-lines
     initial: 400
 
+  # Brightness step & floor are PERCENTAGES (1-100 %) as of v3.1.
   styrbar_brightness_step:
     name: STYRBAR Brightness step
     min: 1
-    max: 64
+    max: 100
     step: 1
+    unit_of_measurement: "%"
     icon: mdi:brightness-6
-    initial: 20
+    initial: 8
 
   styrbar_brightness_floor:
     name: STYRBAR Brightness floor
     min: 1
-    max: 254
+    max: 100
     step: 1
+    unit_of_measurement: "%"
     icon: mdi:brightness-2
-    initial: 5
+    initial: 2
 
 input_datetime:
   styrbar_day_start:
@@ -80,3 +87,24 @@ input_datetime:
     has_time: true
     icon: mdi:weather-sunset-down
     initial: "19:00:00"
+
+input_boolean:
+  styrbar_adaptive_only_when_off:
+    name: STYRBAR Apply turn-on settings only when off
+    icon: mdi:lightbulb-auto
+    # off (default) = always apply brightness + color temp on turn-on.
+    # on            = only apply them when the light was actually off,
+    #                 preserving a manually-set level when already on.
+
+# ----------------------------------------------------------------------------
+# Optional: per-remote "last controller event" helper.
+# Required ONLY if you want double-press (Up/Down) and release events. Create
+# one input_text per remote and select it in the blueprint's "(Optional) Helper
+# - Last Controller Event". Leave the blueprint field empty to skip this.
+# Max length must be >= 100.
+# ----------------------------------------------------------------------------
+input_text:
+  styrbar_last_event:
+    name: STYRBAR Last controller event
+    max: 255
+    icon: mdi:remote
