@@ -1,49 +1,59 @@
 blueprint:
-  name: ML Ikea Styrbar zha light control v2.0
-  description: "# ML Ikea Styrbar zha light control v2.0\n\nZHA-only IKEA E2001/E2002
-    STYRBAR controller with hardcoded light actions.\n**V2 changes:** per-button light
-    selection for up/down short & double,\ncolor-temp buttons act on the up-button
-    lights automatically, and the\ncolor/brightness *settings* can be driven by **shared
-    helper entities** so\nseveral STYRBAR automations stay in sync — change one helper,
-    every\nautomation updates.\n\n## Actions\n- **Left short**:  Color temp down (step
-    from helper, default -500 K)\n- **Left long**:   Color temp down per iteration
-    (default -400 K; loops)\n- **Right short**: Color temp up (default +500 K)\n-
-    **Right long**:  Color temp up per iteration (default +400 K; loops)\n- **Up short**:
-    \   Turn on the *up-short* lights\n- **Up double**:   Turn on the *up-double*
-    lights\n- **Up long**:     Brightness up per iteration (default +20; loops)\n-
-    **Down short**:  Turn off the *down-short* lights\n- **Down double**: Turn off
-    the *down-double* lights\n- **Down long**:   Brightness down per iteration (default
-    -20; loops)\n\n## Which lights each action uses\n- **Up short / Up double / Down
-    short / Down double**: their own selectors.\n- **Color temp (Left & Right, short
-    & long)**: the **union of the Up-short\n  and Up-double lights**, deduplicated
+  name: ML Ikea Styrbar zha light control v2.1
+  description: "# ML Ikea Styrbar zha light control v2.1\n\nZHA-only IKEA E2001/E2002
+    STYRBAR controller with hardcoded light actions.\n**V2.1 changes:** fixed a bug
+    where holding Up/Down first executed the\nshort-press action, turning on lights
+    that were off (or turning off lights)\nbefore the brightness loop started. Short
+    presses on Up/Down now wait for a\nconfigurable hold-detection window before
+    executing.\n\n**V2 changes:** per-button light selection for up/down short &
+    double,\ncolor-temp buttons act on the up-button lights automatically, and the\ncolor/brightness
+    *settings* can be driven by **shared helper entities** so\nseveral STYRBAR automations
+    stay in sync — change one helper, every\nautomation updates.\n\n## Actions\n-
+    **Left short**:  Color temp down (step from helper, default -500 K)\n- **Left
+    long**:   Color temp down per iteration (default -400 K; loops)\n- **Right short**:
+    Color temp up (default +500 K)\n- **Right long**:  Color temp up per iteration
+    (default +400 K; loops)\n- **Up short**:     Turn on the *up-short* lights (after
+    hold-detection window)\n- **Up double**:   Turn on the *up-double* lights\n- **Up
+    long**:       Brightness up per iteration (default +20; loops)\n- **Down short**:
+    \ Turn off the *down-short* lights (after hold-detection window)\n- **Down double**:
+    Turn off the *down-double* lights\n- **Down long**:    Brightness down per iteration
+    (default -20; loops)\n\n## Which lights each action uses\n- **Up short / Up double
+    / Down short / Down double**: their own selectors.\n- **Color temp (Left & Right,
+    short & long)**: the **union of the Up-short\n  and Up-double lights**, deduplicated
     (a light listed in both is handled\n  once). Not separately configurable — it
-    always follows the up-button.\n- **Up long (brighten)**: union of Up-short + Up-double
-    lights.\n- **Down long (dim)**: union of Down-short + Down-double lights.\n\n##
-    Rules\n- Brightness and color-temp adjustments only affect lights that are\n  **already
-    on** (and that support the relevant feature). Off lights are skipped.\n- Brightness
-    floors at the configured floor (default 5) and caps at 255 —\n  dimming never
-    turns a light off.\n- Color temp is clamped to each light's supported min/max
-    kelvin.\n- On turn-on (Up short / Up double) lights are set to a configurable\n
-    \ brightness and a time-of-day color temperature.\n\n## Synced settings via fixed
-    helpers\nThe settings below are read **live** at run time from a fixed set of
-    helper\nentities (defined in `styrbar_helpers.yaml`). They are **not selectable
-    in\nthis blueprint** - every automation built from this blueprint reads the\nsame
-    helpers, so editing a helper value (e.g. from a dashboard) instantly\nchanges
-    the behaviour of all of them. If a helper is missing or\nunavailable, the built-in
-    fallback is used.\n\n| Setting | Helper entity | Fallback |\n|---|---|---|\n|
-    Daytime color temp | input_number.styrbar_day_color_temp | 3400 K |\n| Night-time
-    color temp | input_number.styrbar_night_color_temp | 2200 K |\n| Daytime window
-    start | input_datetime.styrbar_day_start | 06:00 |\n| Daytime window end | input_datetime.styrbar_day_end
-    | 19:00 |\n| Color temp step - short | input_number.styrbar_color_temp_step_short
-    | 500 K |\n| Color temp step - long | input_number.styrbar_color_temp_step_long
-    | 400 K |\n| Brightness step | input_number.styrbar_brightness_step | 20 |\n|
-    Brightness floor | input_number.styrbar_brightness_floor | 5 |\n\n**You must create
-    these helpers first** (see `styrbar_helpers.yaml`),\notherwise the fallback values
-    are always used.\n\n## Optional helper - double press & release events\nDouble-press
-    (Up/Down) and `ahb_controller_event` release events need an\n`input_text` helper
-    for state across restarts. Leave it empty to disable\nthose features; everything
-    else still works.\n"
+    always follows the up-button.\n- **Up long (brighten)**: union of Up-short +
+    Up-double lights.\n- **Down long (dim)**: union of Down-short + Down-double
+    lights.\n\n## Rules\n- Brightness and color-temp adjustments only affect lights
+    that are\n  **already on** (and that support the relevant feature). Off lights
+    are skipped.\n- Brightness floors at the configured floor (default 5) and caps
+    at 255 —\n  dimming never turns a light off.\n- Color temp is clamped to each
+    light's supported min/max kelvin.\n- On turn-on (Up short / Up double) lights
+    are set to a configurable\n  brightness and a time-of-day color temperature.\n\n##
+    Hold-detection window (V2.1)\nThe IKEA remote sends the short-press command
+    the moment you touch the\nUp/Down button, and the hold command only ~1 second
+    later. To prevent a\nlong press from triggering the short-press action (the
+    old bug), single\npresses wait `long_press_detection_ms` before executing.\nIncrease
+    this value if a long press still briefly flashes the short-press\naction; decrease
+    it to make single presses feel snappier.\n\n## Synced settings via fixed helpers\nThe
+    settings below are read **live** at run time from a fixed set of helper\nentities
+    (defined in `styrbar_helpers.yaml`). They are **not selectable in\nthis blueprint**
+    - every automation built from this blueprint reads the\nsame helpers, so editing
+    a helper value (e.g. from a dashboard) instantly\nchanges the behaviour of all
+    of them. If a helper is missing or\nunavailable, the built-in fallback is used.\n\n|
+    Setting | Helper entity | Fallback |\n|---|---|---|\n| Daytime color temp |
+    input_number.styrbar_day_color_temp | 3400 K |\n| Night-time color temp | input_number.styrbar_night_color_temp
+    | 2200 K |\n| Daytime window start | input_datetime.styrbar_day_start | 06:00
+    |\n| Daytime window end | input_datetime.styrbar_day_end | 19:00 |\n| Color
+    temp step - short | input_number.styrbar_color_temp_step_short | 500 K |\n| Color
+    temp step - long | input_number.styrbar_color_temp_step_long | 400 K |\n| Brightness
+    step | input_number.styrbar_brightness_step | 20 |\n| Brightness floor | input_number.styrbar_brightness_floor
+    | 5 |\n\n**You must create these helpers first** (see `styrbar_helpers.yaml`),\notherwise
+    the fallback values are always used.\n\n## Optional helper - double press &
+    release events\nDouble-press (Up/Down) and `ahb_controller_event` release events
+    need an\n`input_text` helper for state across restarts. Leave it empty to disable\nthose
+    features; everything else still works.\n"
   domain: automation
+  source_url: https://raw.githubusercontent.com/Maart3nL/HA-BLUEPRINTS/refs/heads/main/ml_ikea_styrbar_zha_light_control_v2.yaml
   homeassistant:
     min_version: 2024.10.0
   input:
@@ -144,6 +154,20 @@ blueprint:
           unit_of_measurement: milliseconds
           mode: box
           step: 10.0
+    long_press_detection_ms:
+      name: (Optional) Short press - hold detection window
+      description: Time a single press on Up/Down waits before executing, so a long
+        press does not trigger the short-press action first. Must exceed the remote's
+        hold threshold (~1000 ms). Increase if lights flash during a long press;
+        decrease for snappier single presses.
+      default: 1100
+      selector:
+        number:
+          min: 0.0
+          max: 3000.0
+          unit_of_measurement: milliseconds
+          mode: box
+          step: 50.0
     helper_double_press_delay:
       name: (Optional) Helper - Double Press delay
       description: Max delay between the first and second press for the double press
@@ -168,13 +192,20 @@ blueprint:
           unit_of_measurement: milliseconds
           mode: box
           step: 10.0
-  source_url: https://raw.githubusercontent.com/Maart3nL/HA-BLUEPRINTS/refs/heads/main/ml_ikea_styrbar_zha_light_control_v2.yaml
+mode: restart
+max_exceeded: silent
+triggers:
+- trigger: event
+  event_type: zha_event
+  event_data:
+    device_id: !input controller_device
 variables:
   helper_last_controller_event: !input helper_last_controller_event
   helper_double_press_delay: !input helper_double_press_delay
   helper_debounce_delay: !input helper_debounce_delay
   long_press_loop_delay: !input long_press_loop_delay
   long_press_max_repeats: !input long_press_max_repeats
+  long_press_detection_ms: !input long_press_detection_ms
   turn_on_brightness_pct: !input turn_on_brightness_pct
   controller_id: !input controller_device
   lights_up_short: !input lights_up_short
@@ -191,8 +222,7 @@ variables:
   e_brightness_floor: input_number.styrbar_brightness_floor
   day_color_temp: '{{ (states(e_day_color_temp) | float(3400)) | int }}'
   night_color_temp: '{{ (states(e_night_color_temp) | float(2200)) | int }}'
-  color_temp_step_short: '{{ (states(e_color_temp_step_short) | float(500)) | int
-    }}'
+  color_temp_step_short: '{{ (states(e_color_temp_step_short) | float(500)) | int }}'
   color_temp_step_long: '{{ (states(e_color_temp_step_long) | float(400)) | int }}'
   brightness_step: '{{ (states(e_brightness_step) | float(20)) | int }}'
   brightness_floor: '{{ (states(e_brightness_floor) | float(5)) | int }}'
@@ -207,6 +237,8 @@ variables:
     100] | max }}'
   helper_configured: '{{ (helper_last_controller_event | default('''') | string |
     trim) != '''' }}'
+  single_press_delay_ms: '{{ [long_press_detection_ms | int, adjusted_double_press_delay
+    | int if helper_configured else 0] | max }}'
   adaptive_on_kelvin: '{%- set cur = now().hour * 60 + now().minute -%} {%- set start
     = day_start_time.split('':'')[0] | int * 60 + day_start_time.split('':'')[1] |
     int -%} {%- set end = day_end_time.split('':'')[0] | int * 60 + day_end_time.split('':'')[1]
@@ -248,13 +280,6 @@ variables:
     in button_down_short\n   or trigger_action in button_left_long\n   or trigger_action
     in button_right_long\n   or trigger_action in button_up_long\n   or trigger_action
     in button_down_long }}"
-mode: restart
-max_exceeded: silent
-triggers:
-- trigger: event
-  event_type: zha_event
-  event_data:
-    device_id: !input controller_device
 conditions:
 - condition: template
   value_template: '{{ trigger_action not in ["", "None", "unknown"] }}'
@@ -323,7 +348,7 @@ actions:
                   max_k: '{{ state_attr(repeat.item, ''max_color_temp_kelvin'') |
                     int(default=6500) }}'
                   target_k: '{{ [[current_k - (color_temp_step_long | int), min_k]
-                    | max, max_k] | min }}'
+                | max, max_k] | min }}'
               - action: light.turn_on
                 target:
                   entity_id: '{{ repeat.item }}'
@@ -389,7 +414,7 @@ actions:
                   max_k: '{{ state_attr(repeat.item, ''max_color_temp_kelvin'') |
                     int(default=6500) }}'
                   target_k: '{{ [[current_k + (color_temp_step_long | int), min_k]
-                    | max, max_k] | min }}'
+                | max, max_k] | min }}'
               - action: light.turn_on
                 target:
                   entity_id: '{{ repeat.item }}'
@@ -430,10 +455,8 @@ actions:
               color_temp_kelvin: '{{ adaptive_on_kelvin }}'
               brightness_pct: '{{ turn_on_brightness_pct | int }}'
       default:
-      - if: '{{ helper_configured }}'
-        then:
-        - delay:
-            milliseconds: '{{ adjusted_double_press_delay }}'
+      - delay:
+          milliseconds: '{{ single_press_delay_ms | int }}'
       - event: ahb_controller_event
         event_data:
           controller: '{{ controller_id }}'
@@ -503,10 +526,8 @@ actions:
             target:
               entity_id: '{{ lights_down_double }}'
       default:
-      - if: '{{ helper_configured }}'
-        then:
-        - delay:
-            milliseconds: '{{ adjusted_double_press_delay }}'
+      - delay:
+          milliseconds: '{{ single_press_delay_ms | int }}'
       - event: ahb_controller_event
         event_data:
           controller: '{{ controller_id }}'
@@ -514,8 +535,8 @@ actions:
       - if: '{{ lights_down_short | count > 0 }}'
         then:
         - action: light.turn_off
-          target:
-            entity_id: '{{ lights_down_short }}'
+            target:
+              entity_id: '{{ lights_down_short }}'
   - conditions: '{{ trigger_action in button_down_long }}'
     sequence:
     - event: ahb_controller_event
