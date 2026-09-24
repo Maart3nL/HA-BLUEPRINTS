@@ -1,6 +1,6 @@
 blueprint:
-  name: ML Ikea Styrbar zha light control v2.1
-  description: "# ML Ikea Styrbar zha light control v2.1\n\nZHA-only IKEA E2001/E2002
+  name: ML Ikea Styrbar zha light control v2.0
+  description: "# ML 2 Ikea Styrbar zha light control v2.1\n\nZHA-only IKEA E2001/E2002
     STYRBAR controller with hardcoded light actions.\n**V2.1 changes:** fixed a bug
     where holding Up/Down first executed the\nshort-press action, turning on lights
     that were off (or turning off lights)\nbefore the brightness loop started. Short
